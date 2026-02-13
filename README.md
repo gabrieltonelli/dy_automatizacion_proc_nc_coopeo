@@ -63,8 +63,17 @@ python solicitudes_nc_pipeline.py --desde 2024-01-01 --hasta 2024-01-31
 # Filtrar un solo proveedor
 python solicitudes_nc_pipeline.py --solo-prov 12345
 
+# Filtrar documentos específicos (lista separada por comas)
+python solicitudes_nc_pipeline.py --doc-filter 27200375198,27200375199
+
+# Limpiar directorios de salida y logs antes de iniciar
+python solicitudes_nc_pipeline.py --limpiar
+
 # Simulación (descarga y procesa pero NO envía a la API destino)
 python solicitudes_nc_pipeline.py --dry-run
+
+# Ejemplo completo: Limpiar, filtrar documentos específicos de un proveedor y simular
+python solicitudes_nc_pipeline.py --limpiar --doc-filter 27200375198,27200374851 --solo-prov 7150 --dry-run
 ```
 
 Para ver todas las opciones disponibles:

@@ -1,0 +1,16 @@
+# Entorno y Configuración
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs y Salidas del Pipeline
+SolicitudNCCoop/
+logs/
+*.log
+*.csv
+
+# Sistema
+.DS_Store
+Thumbs.db
