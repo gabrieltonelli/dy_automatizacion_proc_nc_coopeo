@@ -93,6 +93,9 @@ LOGS_DIR = ""
 LOG_CSV = ""
 POST_DESTINO_TOKEN = ""
 
+# Carpeta local para evitar problemas con unidades virtuales (Staging)
+LOCAL_STAGING = "./temp_staging"
+
 
 # ====== Helpers de fechas =====================================================
 def hoy_formato() -> str:
@@ -454,22 +457,22 @@ def ensure_dirs():
     Crea los directorios necesarios. Usa una lógica más robusta para evitar
     errores con unidades virtuales (como Google Drive / WinError 1).
     """
-    for d in [ESPERA_DIR, OK_DIR, ERROR_DIR, TEXTOS_DIR, JSON_DIR, LOGS_DIR]:
+    # 1. Directorios Finales (Drive)
+    for d in [OK_DIR, ERROR_DIR, TEXTOS_DIR, JSON_DIR, LOGS_DIR]:
         if not d:
             continue
         try:
             if not os.path.exists(d):
                 os.makedirs(d, exist_ok=True)
         except OSError as e:
-            # Ignoramos WinError 1 (Función incorrecta) ya que es un falso positivo 
-            # común en unidades virtuales de Google Drive.
+            # Ignoramos WinError 1 (Función incorrecta) en unidades virtuales
             if getattr(e, 'winerror', None) == 1:
                 continue
-            
-            # Para otros errores, solo lanzamos si la carpeta realmente no existe
             if not os.path.exists(d):
-                print(f"[ERROR] No se pudo crear el directorio: {d}. Error: {e}")
-                raise
+                print(f"[WARNING] No se pudo verificar/crear directorio final: {d}. {e}")
+
+    # 2. Directorio de Staging Local (Siempre se crea)
+    os.makedirs(LOCAL_STAGING, exist_ok=True)
 
 
 def build_logger(log_path: Optional[str], json_logs: bool, run_id: str) -> logging.Logger:
@@ -817,93 +820,79 @@ def procesar(args: argparse.Namespace):
                 nombre_txt = f"{nombre_base}.txt"
                 nombre_json = f"{nombre_base}.json"
 
-                path_espera = os.path.join(ESPERA_DIR, nombre_pdf)
+                path_pdf_local = os.path.join(LOCAL_STAGING, nombre_pdf)
+                path_txt_local = os.path.join(LOCAL_STAGING, nombre_txt)
+                path_json_local = os.path.join(LOCAL_STAGING, nombre_json)
+
+                # Rutas finales (Drive)
                 path_ok = os.path.join(OK_DIR, nombre_pdf)
                 path_err = os.path.join(ERROR_DIR, nombre_pdf)
-                path_txt = os.path.join(TEXTOS_DIR, nombre_txt)
-                path_json = os.path.join(JSON_DIR, nombre_json)
+                path_txt_final = os.path.join(TEXTOS_DIR, nombre_txt)
+                path_json_final = os.path.join(JSON_DIR, nombre_json)
+
+                # Limpiar staging previo por las dudas
+                for p in [path_pdf_local, path_txt_local, path_json_local]:
+                    if os.path.exists(p): os.remove(p)
 
                 # Idempotencia: si ya procesado o ya está en OK, saltar
-                # Si se usa doc_filter, ignoramos historial (forzar)
                 if not doc_filter_list:
                     if os.path.exists(path_ok) or historial.ya_procesado(prov, nro, tipocomp, letra):
-                        logger.info(f"[prov={prov}] Ya procesado previamente (Historial o Archivo OK): {nombre_pdf}")
+                        logger.info(f"[prov={prov}] Ya procesado previamente: {nombre_pdf}")
                         continue
 
                 try:
-                    # Descargar PDF
-                    logger.info(f"[prov={prov}] Descargando PDF {nombre_pdf}…")
+                    # 1. Descargar PDF Localmente
+                    logger.info(f"[prov={prov}] Descargando PDF {nombre_pdf} (Staging Local)…")
                     contenido = api.descargar_pdf(nro, tipocomp, letra)
                     if len(contenido) < DEFAULT_MIN_PDF_BYTES:
                         raise RuntimeError(f"PDF demasiado pequeño ({len(contenido)} bytes)")
 
-                    with open(path_espera, "wb") as f:
+                    with open(path_pdf_local, "wb") as f:
                         f.write(contenido)
-                    logger.info(f"[prov={prov}] ✓ PDF guardado: {nombre_pdf}")
+                    logger.info(f"[prov={prov}] ✓ PDF descargado localmente.")
 
                     if args.solo_descarga:
-                        # Mover a OK y marcar historial para no repetir descarga
-                        if os.path.exists(path_espera):
-                            shutil.move(path_espera, path_ok)
+                        # Mover a OK y marcar historial
+                        shutil.move(path_pdf_local, path_ok)
                         fecha_reg = datetime.now(TZ).strftime("%d/%m/%Y")
                         historial.agregar(prov, nro, tipocomp, letra, fecha_reg)
-                        write_log_row_csv(log_csv, "DOWNLOAD_ONLY", prov, nombre_pdf, nro, tipocomp, letra, "Descargado (flag --solo-descarga)")
+                        write_log_row_csv(log_csv, "DOWNLOAD_ONLY", prov, nombre_pdf, nro, tipocomp, letra, "Descargado")
                         stats["nc_procesadas_ok"] += 1
                         stats["detalles_por_proveedor"][prov]["ok"] += 1
                         continue
 
-                    # Extraer texto
-                    texto = pdf_extract_text(path_espera)
-                    
-                    # Guardar texto extraído
-                    with open(path_txt, "w", encoding="utf-8") as f:
+                    # 2. Extraer texto Localmente
+                    texto = pdf_extract_text(path_pdf_local)
+                    with open(path_txt_local, "w", encoding="utf-8") as f:
                         f.write(texto)
-                    logger.info(f"[PROVEEDOR {prov}] ✓ Texto guardado: {nombre_txt}")
 
+                    # 3. Parsear y Generar JSON Localmente
                     extra = parse_nc_data(texto)
                     fecha_comprobante = extra.get("fecha")
                     items = extra.get("items", [])
 
-                    # Normalización de importes principales
                     importe_val = normalizar_importe_ar(str(it.get("importe"))) if it.get("importe") is not None else None
                     iva_val = normalizar_importe_ar(str(it.get("iva"))) if it.get("iva") is not None else None
                     
-                    # Guardar JSON parseado
                     datos_json = {
                         "proveedor": prov,
                         "nro_comprobante": nro,
                         "tipocomp": tipocomp,
                         "letra": letra,
-                        
-                        # Datos unificados
                         "importe": float(importe_val) if importe_val else 0.0,
                         "iva": float(iva_val) if iva_val else 0.0,
-                        
-                        "fecha_comprobante": fecha_comprobante, # Renombrado de fecha_pdf/fecha
+                        "fecha_comprobante": fecha_comprobante,
                         "observacion": it.get("observacion"),
-                        
                         "archivo_pdf": nombre_pdf,
                         "items": items,
-                        
                         "timestamp_procesado": datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
                     }
                     
-                    with open(path_json, "w", encoding="utf-8") as f:
+                    with open(path_json_local, "w", encoding="utf-8") as f:
                         json.dump(datos_json, f, indent=2, ensure_ascii=False)
-                    logger.info(f"[PROVEEDOR {prov}] ✓ JSON guardado: {nombre_json}")
                     
-                    stats["archivos_generados"] += 1
-
-                    # Payload (ajustar si el destino espera el formato nuevo)
-                    # Por ahora mantengo el payload compatible con lo que se enviaba, 
-                    # pero agregando items si es necesario. El usuario no especificó payload, solo archivo JSON.
-                    # Asumiré que payload debe reflejar JSON.
+                    # 4. POST al destino
                     payload = datos_json.copy()
-
-                    # POST al destino
-
-
-                    # POST destino
                     post_destino(
                         url=args.post_destino_url,
                         headers={"Content-Type": "application/json", "Accept": "application/json"},
@@ -913,31 +902,44 @@ def procesar(args: argparse.Namespace):
                         logger=logger
                     )
 
-                    # Mover a Procesados + marcar índice
-                    if os.path.exists(path_espera):
-                        shutil.move(path_espera, path_ok)
-                        
-                    # Registrar en historial CSV usando fecha real del comprobante si la tenemos, o hoy
+                    # 5. Mover/Copiar a Destinos Finales (Drive)
+                    logger.info(f"[prov={prov}] Persistiendo archivos en Drive…")
+                    
+                    # El PDF se mueve (shutil.move maneja cross-disk)
+                    shutil.move(path_pdf_local, path_ok)
+                    
+                    # Texto y JSON se copian (shutil.copy2)
+                    shutil.copy2(path_txt_local, path_txt_final)
+                    shutil.copy2(path_json_local, path_json_final)
+
+                    # Registrar en historial
                     fecha_reg = fecha_comprobante if fecha_comprobante else datetime.now(TZ).strftime("%d/%m/%Y")
                     historial.agregar(prov, nro, tipocomp, letra, fecha_reg)
                     
-                    write_log_row_csv(log_csv, "OK", prov, nombre_pdf, nro, tipocomp, letra, "Procesado sin errores")
+                    write_log_row_csv(log_csv, "OK", prov, nombre_pdf, nro, tipocomp, letra, "Procesado OK")
                     stats["nc_procesadas_ok"] += 1
                     stats["detalles_por_proveedor"][prov]["ok"] += 1
-                    logger.info(f"[prov={prov}] Procesado OK: {nombre_pdf}")
+                    stats["archivos_generados"] += 1
+                    logger.info(f"[prov={prov}] ✓ Completado: {nombre_pdf}")
 
                 except Exception as e_item:
-                    # Mover a ERROR y log
+                    # Mover PDF a ERROR si existe localmente o en espera
                     try:
-                        if os.path.exists(path_espera):
-                            shutil.move(path_espera, path_err)
-                    except Exception:
-                        pass
+                        if os.path.exists(path_pdf_local):
+                            shutil.move(path_pdf_local, path_err)
+                    except Exception: pass
+                    
                     write_log_row_csv(log_csv, "ERROR", prov, nombre_pdf, nro, tipocomp, letra, f"Fallo: {e_item}")
                     stats["nc_con_error"] += 1
                     stats["detalles_por_proveedor"][prov]["error"] += 1
-                    logger.error(f"[prov={prov}] Error con {nombre_pdf}: {e_item}")
+                    logger.error(f"[prov={prov}] Fallo en {nombre_pdf}: {e_item}")
                     continue
+                finally:
+                    # Limpiar staging local al final de cada item
+                    for p in [path_pdf_local, path_txt_local, path_json_local]:
+                        if os.path.exists(p):
+                            try: os.remove(p)
+                            except: pass
             
             # Resumen del proveedor
             det = stats["detalles_por_proveedor"][prov]

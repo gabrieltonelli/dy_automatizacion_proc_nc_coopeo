@@ -115,3 +115,7 @@ SolicitudNCCoop/
 
 -   **Consola**: Muestra el progreso en tiempo real y un **resumen final** con estadísticas de éxito.
 -   **NC_Log.csv**: Registro histórico de cada comprobante procesado (timestamp, proveedor, archivo, estado, mensaje).
+
+### 🛠️ Staging Local (Robustez)
+Para evitar errores de "Función incorrecta" o "Ruta no encontrada" comunes en unidades virtuales (como Google Drive `G:`), el script utiliza una carpeta local temporal `./temp_staging`. 
+Los archivos se descargan y procesan localmente y solo se mueven al destino final (`OK_DIR`) una vez completados con éxito. Esto garantiza la integridad de los datos y la compatibilidad con unidades virtuales.
