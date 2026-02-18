@@ -85,6 +85,9 @@ python solicitudes_nc_pipeline.py --limpiar
 # Simulación (descarga y procesa pero NO envía a la API destino)
 python solicitudes_nc_pipeline.py --dry-run
 
+# Solo descargar los archivos PDF (sin procesarlos ni parsearlos)
+python solicitudes_nc_pipeline.py --solo-descarga
+
 # Ejemplo completo: Limpiar, filtrar documentos específicos de un proveedor y simular
 python solicitudes_nc_pipeline.py --limpiar --doc-filter 27200375198,27200374851 --solo-prov 7150 --dry-run
 ```

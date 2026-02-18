@@ -84,12 +84,15 @@ DEFAULT_MIN_PDF_BYTES = 1024  # evita guardar HTML chico o PDFs vacíos
 
 # ====== Directorios de trabajo ================================================
 OUT_DIR = os.getenv("OUT_DIR", "./SolicitudNCCoop")
-ESPERA_DIR = os.path.join(OUT_DIR, "espera")
-OK_DIR = os.path.join(OUT_DIR, "Procesados")
-ERROR_DIR = os.path.join(OUT_DIR, "Procesados con Error")
-TEXTOS_DIR = os.path.join(OUT_DIR, "textos_extraidos")  # Nuevos: archivos .txt
-JSON_DIR = os.path.join(OUT_DIR, "datos_parseados")     # Nuevos: archivos .json
-LOGS_DIR = os.path.join(OUT_DIR, "logs")
+
+# Permite sobrescribir cada carpeta individualmente por ENV, sino usa subcarpetas de OUT_DIR
+ESPERA_DIR = os.getenv("ESPERA_DIR", os.path.join(OUT_DIR, "espera"))
+OK_DIR = os.getenv("OK_DIR", os.path.join(OUT_DIR, "Procesados"))
+ERROR_DIR = os.getenv("ERROR_DIR", os.path.join(OUT_DIR, "Procesados con Error"))
+TEXTOS_DIR = os.getenv("TEXTOS_DIR", os.path.join(OUT_DIR, "textos_extraidos"))
+JSON_DIR = os.getenv("JSON_DIR", os.path.join(OUT_DIR, "datos_parseados"))
+LOGS_DIR = os.getenv("LOGS_DIR", os.path.join(OUT_DIR, "logs"))
+
 LOG_CSV = os.path.join(LOGS_DIR, "NC_Log.csv")
 POST_DESTINO_TOKEN = os.getenv("POST_DESTINO_TOKEN")  # Bearer token opcional
 
@@ -805,6 +808,18 @@ def procesar(args: argparse.Namespace):
 
                     with open(path_espera, "wb") as f:
                         f.write(contenido)
+                    logger.info(f"[prov={prov}] ✓ PDF guardado: {nombre_pdf}")
+
+                    if args.solo_descarga:
+                        # Mover a OK y marcar historial para no repetir descarga
+                        if os.path.exists(path_espera):
+                            shutil.move(path_espera, path_ok)
+                        fecha_reg = datetime.now(TZ).strftime("%d/%m/%Y")
+                        historial.agregar(prov, nro, tipocomp, letra, fecha_reg)
+                        write_log_row_csv(log_csv, "DOWNLOAD_ONLY", prov, nombre_pdf, nro, tipocomp, letra, "Descargado (flag --solo-descarga)")
+                        stats["nc_procesadas_ok"] += 1
+                        stats["detalles_por_proveedor"][prov]["ok"] += 1
+                        continue
 
                     # Extraer texto
                     texto = pdf_extract_text(path_espera)
@@ -946,6 +961,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="No envía POST; solo simula")
 
     # Salidas / logs
+    p.add_argument("--solo-descarga", action="store_true", help="Solo descarga los PDFs; no extrae texto ni envía a destino")
     p.add_argument("--out-dir", default=os.getenv("OUT_DIR", "./SolicitudNCCoop"), help="Directorio raíz de trabajo")
     p.add_argument("--log-file", default=os.getenv("LOG_FILE", "./SolicitudNCCoop/logs/pipeline.log"), help="Archivo de log")
     p.add_argument("--json-logs", action="store_true", help="Formatea logs en JSON")
