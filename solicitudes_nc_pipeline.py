@@ -461,8 +461,12 @@ def ensure_dirs():
             if not os.path.exists(d):
                 os.makedirs(d, exist_ok=True)
         except OSError as e:
-            # Si el error es WinError 1 (Función incorrecta), suele ser porque 
-            # la carpeta ya existe pero la unidad virtual (G Drive) responde mal.
+            # Ignoramos WinError 1 (Función incorrecta) ya que es un falso positivo 
+            # común en unidades virtuales de Google Drive.
+            if getattr(e, 'winerror', None) == 1:
+                continue
+            
+            # Para otros errores, solo lanzamos si la carpeta realmente no existe
             if not os.path.exists(d):
                 print(f"[ERROR] No se pudo crear el directorio: {d}. Error: {e}")
                 raise
