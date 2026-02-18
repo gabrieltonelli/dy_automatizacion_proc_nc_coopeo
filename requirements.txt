@@ -1,0 +1,4 @@
+requests
+PyPDF2
+pdfplumber
+python-dotenv
