@@ -31,7 +31,6 @@ import time
 import uuid
 import math
 import shutil
-import sqlite3
 import hashlib
 import logging
 import traceback
@@ -170,21 +169,39 @@ def parse_nc_data(text: str) -> Dict[str, Any]:
         data["fecha"] = m_fecha.group(1)
 
     # 2. Items
-    # Regex para fila de tabla:
+    # Regex A (con NP): Cantidad, Descripcion, NP, Neto, IVA, ImpInt, Total
     # 16.000 RAV D/YEYO... 96100227536 26.114,40 5.484,02 0,00 31.598,42
-    # Grupos: 1=Cant, 2=Desc, 3=NP, 4=Neto, 5=IVA, 6=ImpInt, 7=Total
-    row_re = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
+    row_re_a = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
+
+    # Regex B (sin NP): Cantidad, Descripcion, Neto, IVA, ImpInt, Total
+    # 12.000 PAN MOLDE... 25.617,60 5.379,70 0,00 30.997,30
+    row_re_b = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
     
+    # Regex C (Sin Cantidad, Solo Descripcion): Descripcion, Neto, IVA, Total
+    # Dif de precio... 275,40 57,83 333,23
+    row_re_c = re.compile(r"^\s*(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
+
     items = []
     lines = text.splitlines()
     in_table = False
+    table_type = None # "A", "B", "C"
     
     for line in lines:
         line = line.strip()
         
-        # Detectar inicio
-        if "Cantidad" in line and "Descripcion" in line and "NP recepcion" in line:
+        # Detectar inicio y tipo
+        if "Descripcion" in line and "Neto" in line:
+            # Cabecera detectada
             in_table = True
+            
+            if "Cantidad" in line:
+                if "NP recepcion" in line:
+                    table_type = "A"
+                else:
+                    table_type = "B"
+            else:
+                # No hay cantidad -> Tipo C (Diferencia de precio)
+                table_type = "C"
             continue
         
         # Detectar fin
@@ -193,27 +210,66 @@ def parse_nc_data(text: str) -> Dict[str, Any]:
             if line.startswith("Neto") or line.startswith("Total"):
                 break
             
-            # Intentar match
-            m = row_re.match(line)
-            if m:
-                # Normalizar valores numéricos
-                try:
-                    cant = float(normalizar_importe_ar(m.group(1)))
-                    neto = float(normalizar_importe_ar(m.group(4)))
-                    iva = float(normalizar_importe_ar(m.group(5)))
-                    imp_int = float(normalizar_importe_ar(m.group(6)))
-                    total = float(normalizar_importe_ar(m.group(7)))
-                except:
-                    cant = 0.0
-                    neto = 0.0
-                    iva = 0.0
-                    imp_int = 0.0
-                    total = 0.0
+            # Intentar match según tipo
+            cant = 0.0
+            desc = ""
+            np_rec = ""
+            neto = 0.0
+            iva = 0.0
+            imp_int = 0.0
+            total = 0.0
+            matched = False
 
+            if table_type == "A":
+                m = row_re_a.match(line)
+                if m:
+                    try:
+                        cant = float(normalizar_importe_ar(m.group(1)) or 0)
+                        desc = m.group(2).strip()
+                        np_rec = m.group(3)
+                        neto = float(normalizar_importe_ar(m.group(4)) or 0)
+                        iva = float(normalizar_importe_ar(m.group(5)) or 0)
+                        imp_int = float(normalizar_importe_ar(m.group(6)) or 0)
+                        total = float(normalizar_importe_ar(m.group(7)) or 0)
+                        matched = True
+                    except:
+                        pass
+            
+            elif table_type == "B":
+                m = row_re_b.match(line)
+                if m:
+                    try:
+                        cant = float(normalizar_importe_ar(m.group(1)) or 0)
+                        desc = m.group(2).strip()
+                        np_rec = ""
+                        neto = float(normalizar_importe_ar(m.group(3)) or 0)
+                        iva = float(normalizar_importe_ar(m.group(4)) or 0)
+                        imp_int = float(normalizar_importe_ar(m.group(5)) or 0)
+                        total = float(normalizar_importe_ar(m.group(6)) or 0)
+                        matched = True
+                    except:
+                        pass
+
+            elif table_type == "C":
+                m = row_re_c.match(line)
+                if m:
+                    try:
+                        cant = 1.0 # Default para dif de precio
+                        desc = m.group(1).strip()
+                        np_rec = ""
+                        neto = float(normalizar_importe_ar(m.group(2)) or 0)
+                        iva = float(normalizar_importe_ar(m.group(3)) or 0)
+                        imp_int = 0.0 # No figura en este formato
+                        total = float(normalizar_importe_ar(m.group(4)) or 0)
+                        matched = True
+                    except:
+                        pass
+
+            if matched:
                 items.append({
                     "cantidad": cant,
-                    "descripcion": m.group(2).strip(),
-                    "np_recepcion": m.group(3),
+                    "descripcion": desc,
+                    "np_recepcion": np_rec,
                     "neto": neto,
                     "iva": iva,
                     "imp_internos": imp_int,
@@ -278,41 +334,119 @@ def imprimir_resumen_final(stats: Dict[str, Any], fecha_desde: str, fecha_hasta:
     print(f"{sep}\n")
 
 # ====== Idempotencia: SQLite ==================================================
-class ProcessIndex:
-    def __init__(self, db_path: str):
-        self.db_path = db_path
-        self._ensure()
+class HistorialProcesados:
+    """
+    Gestiona un archivo CSV con el historial de comprobantes procesados exitosamente.
+    Permite:
+    - Cargar historial al inicio (para no reprocesar).
+    - Agregar nuevos procesados al final (append).
+    - Limpiar registros antiguos (rewrite).
+    """
+    def __init__(self, csv_path: str):
+        self.csv_path = csv_path
+        self.procesados = set() # Set de tuplas (prov, tipo, letra, nro)
+        self.fieldnames = ["PROVEEDOR", "TIPO", "LETRA", "NRO_COMPROBANTE", "FECHA_COMPROBANTE", "FECHA_PROCESADO"]
+        self._cargar()
 
-    def _ensure(self):
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        with sqlite3.connect(self.db_path) as con:
-            con.execute("""
-                CREATE TABLE IF NOT EXISTS procesados (
-                    prov TEXT NOT NULL,
-                    nro TEXT NOT NULL,
-                    tipocomp TEXT NOT NULL,
-                    letra TEXT NOT NULL,
-                    ts TEXT NOT NULL,
-                    PRIMARY KEY (prov, nro, tipocomp, letra)
-                )
-            """)
-            con.commit()
+    def _cargar(self):
+        if not os.path.exists(self.csv_path):
+            return
+        
+        try:
+            with open(self.csv_path, "r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f, delimiter=";")
+                for row in reader:
+                    # Clave única: Prov + Tipo + Letra + Nro
+                    key = (
+                        row.get("PROVEEDOR", "").strip(),
+                        row.get("TIPO", "").strip(),
+                        row.get("LETRA", "").strip(),
+                        row.get("NRO_COMPROBANTE", "").strip()
+                    )
+                    self.procesados.add(key)
+        except Exception as e:
+            print(f"[WARN] Error leyendo historial CSV: {e}")
 
-    def exists(self, prov: str, nro: str, tipocomp: str, letra: str) -> bool:
-        with sqlite3.connect(self.db_path) as con:
-            cur = con.execute("""
-                SELECT 1 FROM procesados
-                WHERE prov=? AND nro=? AND tipocomp=? AND letra=?
-            """, (prov, nro, tipocomp, letra))
-            return cur.fetchone() is not None
+    def ya_procesado(self, prov: str, nro: str, tipocomp: str, letra: str) -> bool:
+        return (str(prov), str(tipocomp), str(letra), str(nro)) in self.procesados
 
-    def add(self, prov: str, nro: str, tipocomp: str, letra: str):
-        with sqlite3.connect(self.db_path) as con:
-            con.execute("""
-                INSERT OR IGNORE INTO procesados (prov, nro, tipocomp, letra, ts)
-                VALUES (?, ?, ?, ?, ?)
-            """, (prov, nro, tipocomp, letra, datetime.now(TZ).isoformat()))
-            con.commit()
+    def agregar(self, prov: str, nro: str, tipocomp: str, letra: str, fecha_comp: str):
+        # Agregar a memoria
+        key = (str(prov), str(tipocomp), str(letra), str(nro))
+        if key in self.procesados:
+            return
+        self.procesados.add(key)
+        
+        # Agregar a archivo (append)
+        file_exists = os.path.exists(self.csv_path)
+        try:
+            with open(self.csv_path, "a", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.fieldnames, delimiter=";")
+                if not file_exists:
+                    writer.writeheader()
+                
+                writer.writerow({
+                    "PROVEEDOR": prov,
+                    "TIPO": tipocomp,
+                    "LETRA": letra,
+                    "NRO_COMPROBANTE": nro,
+                    "FECHA_COMPROBANTE": fecha_comp,
+                    "FECHA_PROCESADO": datetime.now(TZ).strftime("%Y-%m-%d %H:%M:%S")
+                })
+        except Exception as e:
+            print(f"[ERR] No se pudo escribir en historial CSV: {e}")
+
+    def limpiar_antiguos(self, dias_retencion: int):
+        """
+        Reescribe el CSV conservando solo los registros recientes.
+        Ventana = dias_retencion * 2 (margen de seguridad).
+        """
+        if not os.path.exists(self.csv_path):
+            return
+            
+        limite = datetime.now(TZ) - timedelta(days=dias_retencion * 2)
+        # Formato esperado en CSV: YYYY-MM-DD (fecha comprobante) o similar
+        # Asumimos que FECHA_COMPROBANTE viene como DD/MM/YYYY o YYYY-MM-DD
+        
+        temp_rows = []
+        try:
+            with open(self.csv_path, "r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f, delimiter=";")
+                for row in reader:
+                    fecha_str = row.get("FECHA_COMPROBANTE", "")
+                    # Intentar parsear
+                    fecha_dt = None
+                    try:
+                        # Intentar DD/MM/YYYY
+                        fecha_dt = datetime.strptime(fecha_str, "%d/%m/%Y").replace(tzinfo=TZ)
+                    except:
+                        try:
+                            # Intentar YYYY-MM-DD
+                            fecha_dt = datetime.strptime(fecha_str, "%Y-%m-%d").replace(tzinfo=TZ)
+                        except:
+                            pass
+                    
+                    # Si no pudimos parsear fecha, lo conservamos por las dudas (o lo borramos?)
+                    # Mejor conservarlo para no perder historial por error de formato
+                    if fecha_dt:
+                        if fecha_dt >= limite:
+                            temp_rows.append(row)
+                    else:
+                        temp_rows.append(row) # Conservar si fecha inválida
+            
+            # Reescribir
+            with open(self.csv_path, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.fieldnames, delimiter=";")
+                writer.writeheader()
+                writer.writerows(temp_rows)
+                
+            # Actualizar memoria
+            self.procesados.clear()
+            self._cargar()
+            print(f"[INFO] Historial limpiado. Registros conservados: {len(temp_rows)}")
+            
+        except Exception as e:
+            print(f"[WARN] Error limpiando historial: {e}")
 
 # ====== Logging / CSV =========================================================
 def ensure_dirs():
@@ -549,10 +683,15 @@ def procesar(args: argparse.Namespace):
         timeout=args.timeout,
         logger=logger
     )
-
-    # Índice de procesados
-    proc_index = ProcessIndex(db_path=os.path.join(LOGS_DIR, "procesados.db"))
-
+    
+    # Historial de procesados (CSV)
+    historial_csv = os.path.join(LOGS_DIR, "historial_procesados.csv")
+    historial = HistorialProcesados(historial_csv)
+    
+    # Limpieza inicial de historial antiguo (opcional, para mantener el archivo chico)
+    # Usamos args.dias_hacia_atras como referencia
+    historial.limpiar_antiguos(args.dias_hacia_atras)
+    
     # Fechas
     fecha_hasta = args.hasta or hoy_formato()
     fecha_desde = args.desde or desde_formato(args.dias_hacia_atras)
@@ -651,11 +790,11 @@ def procesar(args: argparse.Namespace):
                 path_json = os.path.join(JSON_DIR, nombre_json)
 
                 # Idempotencia: si ya procesado o ya está en OK, saltar
-                if os.path.exists(path_ok) or proc_index.exists(prov, nro, tipocomp, letra):
-                    logger.info(f"[prov={prov}] Ya procesado previamente: {nombre_pdf}")
-                    # Considerar si esto debería incrementar 'ok' o 'encontradas' en stats
-                    # Por ahora, no modifica stats para evitar doble conteo si ya estaba en OK
-                    continue
+                # Si se usa doc_filter, ignoramos historial (forzar)
+                if not doc_filter_list:
+                    if os.path.exists(path_ok) or historial.ya_procesado(prov, nro, tipocomp, letra):
+                        logger.info(f"[prov={prov}] Ya procesado previamente (Historial o Archivo OK): {nombre_pdf}")
+                        continue
 
                 try:
                     # Descargar PDF
@@ -731,7 +870,11 @@ def procesar(args: argparse.Namespace):
                     # Mover a Procesados + marcar índice
                     if os.path.exists(path_espera):
                         shutil.move(path_espera, path_ok)
-                    proc_index.add(prov, nro, tipocomp, letra)
+                        
+                    # Registrar en historial CSV usando fecha real del comprobante si la tenemos, o hoy
+                    fecha_reg = fecha_comprobante if fecha_comprobante else datetime.now(TZ).strftime("%d/%m/%Y")
+                    historial.agregar(prov, nro, tipocomp, letra, fecha_reg)
+                    
                     write_log_row_csv(log_csv, "OK", prov, nombre_pdf, nro, tipocomp, letra, "Procesado sin errores")
                     stats["nc_procesadas_ok"] += 1
                     stats["detalles_por_proveedor"][prov]["ok"] += 1

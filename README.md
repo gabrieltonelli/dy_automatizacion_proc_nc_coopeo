@@ -44,7 +44,20 @@ POST_DESTINO_TOKEN=tu_token_opcional
 OUT_DIR=./SolicitudNCCoop
 ```
 
-## ▶️ Uso
+## Procesamiento Incremental
+
+El script mantiene un registro de los comprobantes procesados exitosamente en el archivo:
+`SolicitudNCCoop/logs/historial_procesados.csv` (ruta por defecto).
+
+**Funcionamiento:**
+1.  **Evita duplicados:** Si un comprobante ya figura en este archivo, el script lo saltará (a menos que uses `--doc-filter`).
+2.  **Registro:** Al finalizar correctamente un comprobante, se agrega una nueva línea al archivo.
+3.  **Edición Manual:** Si necesitas reprocesar un documento específico, abre este archivo (con Excel o Bloc de Notas) y borra la línea correspondiente.
+4.  **Auto-Limpieza:** En cada ejecución, el script elimina automáticamente los registros muy antiguos (basado en `--dias-hacia-atras` * 2) para mantener el archivo ligero.
+
+NO borres este archivo si quieres mantener el historial de lo que ya se hizo. Si lo borras, el script intentará procesar todo de nuevo (respetando la ventana de fechas).
+
+## Uso básico
 
 Ejecutar el script directamente para procesar los últimos `N` días (según `.env`):
 
