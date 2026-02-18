@@ -41,13 +41,13 @@ POST_DESTINO_URL=https://api.tu-sistema.local/ingreso_nc
 POST_DESTINO_TOKEN=tu_token_opcional
 
 # Directorio de Salida (Opcional)
-OUT_DIR=./SolicitudNCCoop
+OUT_DIR=./outputs
 ```
 
 ## Procesamiento Incremental
 
 El script mantiene un registro de los comprobantes procesados exitosamente en el archivo:
-`SolicitudNCCoop/logs/historial_procesados.csv` (ruta por defecto).
+`outputs/logs/historial_procesados.csv` (ruta por defecto).
 
 **Funcionamiento:**
 1.  **Evita duplicados:** Si un comprobante ya figura en este archivo, el script lo saltará (a menos que uses `--doc-filter`).
@@ -99,10 +99,10 @@ python solicitudes_nc_pipeline.py --help
 
 ## 📂 Estructura de Salida
 
-El script genera automáticamente la siguiente estructura en `OUT_DIR` (por defecto `./SolicitudNCCoop`):
+El script genera automáticamente la siguiente estructura en `OUT_DIR` (por defecto `./outputs`):
 
 ```
-SolicitudNCCoop/
+outputs/
 ├── espera/                 # Archivos temporales durante la descarga
 ├── Procesados/             # PDFs procesados exitosamente
 ├── Procesados con Error/   # PDFs que fallaron (descarga, extracción o envío)

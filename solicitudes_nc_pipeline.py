@@ -994,9 +994,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true", help="No envía POST; solo simula")
 
     # Salidas / logs
+    def_out_dir = os.getenv("OUT_DIR", "./outputs")
+    logs_dir_env = os.getenv("LOGS_DIR")
+    if logs_dir_env:
+        def_log_file = os.path.join(logs_dir_env, "pipeline.log")
+    else:
+        def_log_file = os.path.join(def_out_dir, "logs", "pipeline.log")
+
     p.add_argument("--solo-descarga", action="store_true", help="Solo descarga los PDFs; no extrae texto ni envía a destino")
-    p.add_argument("--out-dir", default=os.getenv("OUT_DIR", "./SolicitudNCCoop"), help="Directorio raíz de trabajo")
-    p.add_argument("--log-file", default=os.getenv("LOG_FILE", "./SolicitudNCCoop/logs/pipeline.log"), help="Archivo de log")
+    p.add_argument("--out-dir", default=def_out_dir, help="Directorio raíz de trabajo")
+    p.add_argument("--log-file", default=os.getenv("LOG_FILE", def_log_file), help="Archivo de log")
     p.add_argument("--json-logs", action="store_true", help="Formatea logs en JSON")
 
     return p
