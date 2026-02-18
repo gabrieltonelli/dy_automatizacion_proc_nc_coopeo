@@ -51,7 +51,7 @@ from PyPDF2 import PdfReader
 # ====== Opcional: .env ========================================================
 try:
     from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
+    load_dotenv(override=True)
 except ImportError:
     # Fallback: leer .env manualmente si no existe python-dotenv
     try:
@@ -82,19 +82,16 @@ DEFAULT_REINTENTOS = 3
 DEFAULT_BACKOFF = 0.5
 DEFAULT_MIN_PDF_BYTES = 1024  # evita guardar HTML chico o PDFs vacíos
 
-# ====== Directorios de trabajo ================================================
-OUT_DIR = os.getenv("OUT_DIR", "./SolicitudNCCoop")
-
-# Permite sobrescribir cada carpeta individualmente por ENV, sino usa subcarpetas de OUT_DIR
-ESPERA_DIR = os.getenv("ESPERA_DIR", os.path.join(OUT_DIR, "espera"))
-OK_DIR = os.getenv("OK_DIR", os.path.join(OUT_DIR, "Procesados"))
-ERROR_DIR = os.getenv("ERROR_DIR", os.path.join(OUT_DIR, "Procesados con Error"))
-TEXTOS_DIR = os.getenv("TEXTOS_DIR", os.path.join(OUT_DIR, "textos_extraidos"))
-JSON_DIR = os.getenv("JSON_DIR", os.path.join(OUT_DIR, "datos_parseados"))
-LOGS_DIR = os.getenv("LOGS_DIR", os.path.join(OUT_DIR, "logs"))
-
-LOG_CSV = os.path.join(LOGS_DIR, "NC_Log.csv")
-POST_DESTINO_TOKEN = os.getenv("POST_DESTINO_TOKEN")  # Bearer token opcional
+# ====== Directorios de trabajo (Configuración dinámica en procesar) ===========
+# Se definen dentro de la función procesar para respetar args y env actualizado.
+ESPERA_DIR = ""
+OK_DIR = ""
+ERROR_DIR = ""
+TEXTOS_DIR = ""
+JSON_DIR = ""
+LOGS_DIR = ""
+LOG_CSV = ""
+POST_DESTINO_TOKEN = ""
 
 
 # ====== Helpers de fechas =====================================================
@@ -453,8 +450,23 @@ class HistorialProcesados:
 
 # ====== Logging / CSV =========================================================
 def ensure_dirs():
+    """
+    Crea los directorios necesarios. Usa una lógica más robusta para evitar
+    errores con unidades virtuales (como Google Drive / WinError 1).
+    """
     for d in [ESPERA_DIR, OK_DIR, ERROR_DIR, TEXTOS_DIR, JSON_DIR, LOGS_DIR]:
-        os.makedirs(d, exist_ok=True)
+        if not d:
+            continue
+        try:
+            if not os.path.exists(d):
+                os.makedirs(d, exist_ok=True)
+        except OSError as e:
+            # Si el error es WinError 1 (Función incorrecta), suele ser porque 
+            # la carpeta ya existe pero la unidad virtual (G Drive) responde mal.
+            if not os.path.exists(d):
+                print(f"[ERROR] No se pudo crear el directorio: {d}. Error: {e}")
+                raise
+
 
 def build_logger(log_path: Optional[str], json_logs: bool, run_id: str) -> logging.Logger:
     logger = logging.getLogger("pipeline")
@@ -632,6 +644,21 @@ def post_destino(url: str, headers: Dict[str, str], payload: Dict[str, Any],
 def procesar(args: argparse.Namespace):
     run_id = uuid.uuid4().hex[:8]
     
+    # Configuración dinámica de directorios
+    global ESPERA_DIR, OK_DIR, ERROR_DIR, TEXTOS_DIR, JSON_DIR, LOGS_DIR, LOG_CSV, POST_DESTINO_TOKEN
+    
+    out_dir = args.out_dir # Prioriza el argumento del CLI
+    
+    ESPERA_DIR = os.getenv("ESPERA_DIR", os.path.join(out_dir, "espera"))
+    OK_DIR = os.getenv("OK_DIR", os.path.join(out_dir, "Procesados"))
+    ERROR_DIR = os.getenv("ERROR_DIR", os.path.join(out_dir, "Procesados con Error"))
+    TEXTOS_DIR = os.getenv("TEXTOS_DIR", os.path.join(out_dir, "textos_extraidos"))
+    JSON_DIR = os.getenv("JSON_DIR", os.path.join(out_dir, "datos_parseados"))
+    LOGS_DIR = os.getenv("LOGS_DIR", os.path.join(out_dir, "logs"))
+    
+    LOG_CSV = os.path.join(LOGS_DIR, "NC_Log.csv")
+    POST_DESTINO_TOKEN = os.getenv("POST_DESTINO_TOKEN")
+
     ensure_dirs()
 
     # Logger estático inicial (luego podríamos rotarlo si limpiamos logs)
