@@ -107,9 +107,12 @@ class CoopParser:
         if m_fecha:
             data["fecha"] = m_fecha.group(1)
 
-        # Regex para diferentes formatos de tabla (A, B, C)
+        # Regex para diferentes formatos de tabla
+        # Formato A: Cantidad | Descripcion | NP recepcion | Neto | IVA | Imp.Internos | Total
         row_re_a = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s+(\d+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
+        # Formato B: Cantidad | Descripcion | Neto | IVA | Imp.Internos | Total (sin NP)
         row_re_b = re.compile(r"^\s*(\d+(?:[.,]\d+)?)\s+(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
+        # Formato C: Descripcion | Neto | IVA | Total
         row_re_c = re.compile(r"^\s*(.+?)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$")
 
         lines = text.splitlines()
@@ -135,17 +138,35 @@ class CoopParser:
                 if table_type == "A":
                     m = row_re_a.match(line)
                     if m:
-                        res = {"cantidad": self.normalizar_importe_ar(m.group(1)), "desc": m.group(2).strip(), "np": m.group(3), "neto": self.normalizar_importe_ar(m.group(4))}
+                        res = {
+                            "cantidad": self.normalizar_importe_ar(m.group(1)),
+                            "desc": m.group(2).strip(),
+                            "np": m.group(3),
+                            "neto": self.normalizar_importe_ar(m.group(4)),
+                            "iva": self.normalizar_importe_ar(m.group(5))
+                        }
                         matched = True
                 elif table_type == "B":
                     m = row_re_b.match(line)
                     if m:
-                        res = {"cantidad": self.normalizar_importe_ar(m.group(1)), "desc": m.group(2).strip(), "np": "", "neto": self.normalizar_importe_ar(m.group(3))}
+                        res = {
+                            "cantidad": self.normalizar_importe_ar(m.group(1)),
+                            "desc": m.group(2).strip(),
+                            "np": "",
+                            "neto": self.normalizar_importe_ar(m.group(3)),
+                            "iva": self.normalizar_importe_ar(m.group(4))
+                        }
                         matched = True
                 elif table_type == "C":
                     m = row_re_c.match(line)
                     if m:
-                        res = {"cantidad": 1.0, "desc": m.group(1).strip(), "np": "", "neto": self.normalizar_importe_ar(m.group(2))}
+                        res = {
+                            "cantidad": 1.0,
+                            "desc": m.group(1).strip(),
+                            "np": "",
+                            "neto": self.normalizar_importe_ar(m.group(2)),
+                            "iva": self.normalizar_importe_ar(m.group(3))
+                        }
                         matched = True
 
                 if matched:
@@ -153,6 +174,7 @@ class CoopParser:
                         "cantidad": res["cantidad"],
                         "descripcion": res["desc"],
                         "np_recepcion": res["np"],
-                        "neto": res["neto"]
+                        "neto": res["neto"],
+                        "iva": res.get("iva") or 0.0
                     })
         return data

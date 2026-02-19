@@ -65,11 +65,23 @@ class FinnegansProcessor:
         else:
             shutil.move(path, os.path.join(self.error_dir, filename))
 
+    @staticmethod
+    def _format_nro_comprobante(nro: str) -> str:
+        """
+        Formatea el número de comprobante al estilo 'TIPO-NUMERO'.
+        Ejemplo: '27200375198' -> '0272-00375198'
+        """
+        nro_norm = str(nro).zfill(12)
+        tipo = nro_norm[:4]
+        numero = nro_norm[4:]
+        return f"{tipo}-{numero}"
+
     def _build_finnegans_payload_v3(self, p: NCPayload) -> Dict[str, Any]:
         """
         Builds the complex JSON expected by Finnegans API (v3).
         """
         cab = p.cabecera
+        nro_formateado = self._format_nro_comprobante(cab.descripcion)
         data = {
             "Transaccionid": 1,
             "Nombre": None,
@@ -90,13 +102,13 @@ class FinnegansProcessor:
             "FchDesdePeriodo": None,
             "FchHastaPeriodo": None,
             "TransaccionAsociadaFCEID": cab.factura_referencia_id,
-            "NumeroContratoIntermediario": cab.descripcion,
+            "NumeroContratoIntermediario": nro_formateado,
             "ComprobanteTipoImpositivoID": "003",
             "CondicionPagoCodigo": cab.condicion_pago,
             "MonedaCodigo": "PES",
             "EmpresaCodigo": cab.empresa_cod,
             "TransaccionSubtipoCodigo": "SOLICITUDNCAUTO",
-            "Descripcion": cab.descripcion,
+            "Descripcion": nro_formateado,
             "VendedorCodigo": cab.vendedor_cod,
             "Cliente": cab.cliente_cod,
             "TransaccionTipoCodigo": "OPER",
@@ -110,7 +122,7 @@ class FinnegansProcessor:
             data["Items"].append({
                 "Cantidad2": item.cantidad,
                 "USR_DescParticular": 0,
-                "PrecioBase": item.precio_unitario,
+                "PrecioBase": item.precio_unitario - item.iva_unitario,
                 "UnidadIDPresentacion": None,
                 "CantidadPresentacion": item.cantidad_presentacion,
                 "DepositoOrigenCodigo": "EXPEDICION ELGUEA ROMAN",
@@ -119,7 +131,7 @@ class FinnegansProcessor:
                 "USRMotivoDevolucionID": item.motivo_devolucion_id,
                 "Cantidad": item.cantidad_presentacion,
                 "Descripcion": item.descripcion,
-                "Precio": item.precio_unitario,
+                "Precio": item.precio_unitario - item.iva_unitario,
                 "DimensionDistribucion": [
                     {
                         "tipoCalculo": "0",

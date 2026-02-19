@@ -118,3 +118,9 @@ La arquitectura actual está preparada para crecer:
 1.  **Nuevos Portales:** Para agregar "La Anónima", basta con crear un `anonima_service.py` que herede/imite a `coop_service.py`.
 2.  **Nuevos Traductores:** Si La Anónima tiene un formato distinto, se crea un `anonima_translator.py` para mapear sus campos a los `models.py` universales.
 3.  **Mismo Destino:** Ambos usarán el mismo `FinnegansService` y `FinnegansProcessor`.
+
+---
+
+## Documentación Adicional
+
+*   📄 [**COMPARISON_ARCHITECTURE.md**](./COMPARISON_ARCHITECTURE.md) — Análisis comparativo entre la arquitectura legacy (Rocketbot + Apps Script) y esta solución. Incluye una discusión estratégica sobre No-Code vs desarrollo asistido por IA, recomendada para equipos directivos y de tecnología.

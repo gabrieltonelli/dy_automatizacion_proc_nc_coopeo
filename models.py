@@ -12,6 +12,7 @@ class NCItem:
     motivo_devolucion_id: str
     cantidad_presentacion: float = 0.0
     neto_linea: float = 0.0
+    iva_unitario: float = 0.0
 
 @dataclass
 class NCCabecera:

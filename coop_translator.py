@@ -1,5 +1,6 @@
 import re
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from models import NCItem, NCCabecera, NCPayload
 from repository import MappingRepository
@@ -118,15 +119,20 @@ class CoopTranslator:
                 unit = prod_info['unit']
                 multiplier = prod_info['multiplier']
 
+            iva_total = it.get("iva", 0.0) or 0.0
+            cantidad = it.get("cantidad", 1.0) or 1.0
+            iva_unitario = iva_total / cantidad
+
             nc_item = NCItem(
-                cantidad=it.get("cantidad", 0.0) / multiplier,
-                precio_unitario=it.get("neto", 0.0) / it.get("cantidad", 1.0) if it.get("cantidad") else 0.0,
+                cantidad=cantidad / multiplier,
+                precio_unitario=it.get("neto", 0.0) / cantidad if cantidad else 0.0,
                 unidad=unit,
                 descripcion=it.get("descripcion", ""),
                 producto_codigo_finnegans=prod_code,
                 motivo_devolucion_id="16",
                 cantidad_presentacion=it.get("cantidad", 0.0),
-                neto_linea=it.get("neto", 0.0)
+                neto_linea=it.get("neto", 0.0),
+                iva_unitario=iva_unitario
             )
             
             if client_cod not in by_client:
@@ -192,15 +198,20 @@ class CoopTranslator:
             unit = prod_info['unit'] if prod_info else "UN"
             multiplier = prod_info['multiplier'] if prod_info else 1.0
 
+            iva_total = it.get("iva", 0.0) or 0.0
+            cantidad = it.get("cantidad", 1.0) or 1.0
+            iva_unitario = iva_total / cantidad
+
             items_fin.append(NCItem(
-                cantidad=it.get("cantidad", 0.0) / multiplier,
-                precio_unitario=it.get("neto", 0.0) / it.get("cantidad", 1.0) if it.get("cantidad") else 0.0,
+                cantidad=cantidad / multiplier,
+                precio_unitario=it.get("neto", 0.0) / cantidad if cantidad else 0.0,
                 unidad=unit,
                 descripcion=it.get("descripcion", ""),
                 producto_codigo_finnegans=prod_code,
                 motivo_devolucion_id="14",
                 cantidad_presentacion=it.get("cantidad", 0.0),
-                neto_linea=it.get("neto", 0.0)
+                neto_linea=it.get("neto", 0.0),
+                iva_unitario=iva_unitario
             ))
             
         return NCPayload(cabecera, items_fin)
@@ -230,7 +241,8 @@ class CoopTranslator:
         if not date_str:
             return ""
         try:
-            dt = datetime.strptime(date_str, "%d/%m/%Y")
+            dt = datetime.strptime(date_str.strip(), "%d/%m/%Y")
             return dt.strftime("%Y-%m-%d")
-        except:
+        except ValueError:
+            logger.warning(f"No se pudo parsear la fecha '{date_str}'. Se envia tal cual.")
             return date_str
