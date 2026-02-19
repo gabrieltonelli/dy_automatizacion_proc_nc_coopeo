@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--doc-filter", help="Lista de comprobantes separados por coma")
     
     # Flags de control
+    parser.add_argument("--sync-catalog", action="store_true", help="Sincroniza el catálogo de productos y finaliza")
     parser.add_argument("--limpiar", action="store_true", help="Limpia directorios de salida antes de iniciar")
     parser.add_argument("--dry-run", action="store_true", help="Procesa todo pero NO envia a Finnegans (simulacion)")
     parser.add_argument("--solo-descarga", action="store_true", help="Solo descarga los PDFs y genera JSONs, no procesa con Finnegans")
@@ -49,6 +50,48 @@ def main():
 
     # --- CONFIGURACION ---
     BASE_DIR = os.getcwd()
+    MAPPINGS_DIR = os.path.join(BASE_DIR, "mappings")
+    repo = MappingRepository(
+        os.path.join(MAPPINGS_DIR, "productos_coop.csv"),
+        os.path.join(MAPPINGS_DIR, "sucursales_coop.csv")
+    )
+
+    # Credenciales Coop
+    COOP_USER = os.getenv("PORTAL_USER")
+    COOP_PASS = os.getenv("PLAIN_PASSWORD")
+    COOP_URL = os.getenv("BASE_URL", "https://proveedoresback.cooperativaobrera.coop")
+    
+    coop = CoopPortalService(COOP_USER, COOP_PASS, COOP_URL, os.getenv("ORIGIN", ""), os.getenv("REFERER", ""))
+
+    # --- FASE 0: SINCRONIZACION DE CATALOGO (Standalone if flag present) ---
+    if args.sync_catalog:
+        logger.info("--- INICIANDO SINCRONIZACION DE CATALOGO ---")
+        try:
+            proveedores = coop.login()
+            all_descs = set()
+            for p_item in proveedores:
+                prov_id = str(p_item.get("prov"))
+                logger.info(f"Sincronizando productos para Proveedor {prov_id}...")
+                coop.seleccionar_proveedor(prov_id)
+                articulos = coop.listar_articulos()
+                
+                for art in articulos:
+                    # Formateo: Descripcion + Gramaje (2 decimales) + Unidad
+                    # Ejemplo: "TAPA PASC HOJALD COOPERAT 400.00grs"
+                    desc = art.get("descripcion", "").strip()
+                    gramaje = art.get("gramaje", 0)
+                    und = art.get("descripcion_gramaje", "").strip()
+                    desc_compuesta = f"{desc} {gramaje:.2f}{und}"
+                    all_descs.add(desc_compuesta)
+            
+            repo.add_missing_products(list(all_descs))
+            logger.info("--- SINCRONIZACION FINALIZADA ---")
+        except Exception as e:
+            logger.error(f"Error sincronizando catalogo: {e}")
+        
+        return # Finalizar ejecucion si --sync-catalog esta presente
+
+    # --- CONFIGURACION RESTANTE (Solo si no es sync standalone) ---
     JSON_DIR = os.getenv("JSON_DIR", os.path.join(BASE_DIR, "SolicitudNCCoop", "datos_parseados"))
     SUCCESS_DIR = os.path.join(os.path.dirname(JSON_DIR), "Finnegans_OK")
     ERROR_DIR = os.path.join(os.path.dirname(JSON_DIR), "Finnegans_Error")
@@ -152,10 +195,6 @@ def main():
     logger.info("--- INICIANDO FASE 2: INTEGRACION FINNEGANS ---")
     
     finnegans = FinnegansService(FINN_ID, FINN_SECRET)
-    repo = MappingRepository(
-        os.path.join(MAPPINGS_DIR, "productos_coop.csv"),
-        os.path.join(MAPPINGS_DIR, "sucursales_coop.csv")
-    )
     translator = CoopTranslator(repo, finnegans)
     
     processor = FinnegansProcessor(

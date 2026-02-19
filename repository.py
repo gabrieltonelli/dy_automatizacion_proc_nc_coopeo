@@ -20,8 +20,8 @@ class MappingRepository:
                 for row in reader:
                     self.products[row['DESCRIPCION_COOP']] = {
                         'code': row['CODIGO_FINNEGANS'],
-                        'unit': row['UNIDAD'],
-                        'multiplier': float(row['MULTIPLO'] or 1.0)
+                        'unit': row.get('UNIDAD', 'UN'),
+                        'multiplier': float(row.get('MULTIPLO', 1.0) or 1.0)
                     }
         else:
             self._create_products_template()
@@ -41,14 +41,37 @@ class MappingRepository:
     def get_branch_client(self, prefix: str):
         return self.branches.get(prefix)
 
+    def add_missing_products(self, list_of_descs: List[str]):
+        """
+        Agrega descripciones faltantes al archivo CSV con código Finnegans vacío.
+        """
+        new_entries = []
+        for desc in list_of_descs:
+            if desc not in self.products:
+                logger.info(f"Nuevo producto detectado: {desc}")
+                new_entries.append({'DESCRIPCION_COOP': desc, 'CODIGO_FINNEGANS': ''})
+                # Actualizar memoria para evitar duplicados en la misma corrida
+                self.products[desc] = {'code': '', 'unit': 'UN', 'multiplier': 1.0}
+
+        if new_entries:
+            file_exists = os.path.exists(self.products_csv)
+            with open(self.products_csv, mode='a', encoding='utf-8', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=['DESCRIPCION_COOP', 'CODIGO_FINNEGANS'], delimiter=';')
+                if not file_exists:
+                    writer.writeheader()
+                writer.writerows(new_entries)
+            logger.info(f"Se agregaron {len(new_entries)} nuevos productos al mapeo.")
+        else:
+            logger.info("No se detectaron productos nuevos.")
+
     def _create_products_template(self):
         logger.info(f"Creating products template at {self.products_csv}")
         os.makedirs(os.path.dirname(self.products_csv), exist_ok=True)
         with open(self.products_csv, mode='w', encoding='utf-8', newline='') as f:
             writer = csv.writer(f, delimiter=';')
-            writer.writerow(['DESCRIPCION_COOP', 'CODIGO_FINNEGANS', 'UNIDAD', 'MULTIPLO'])
+            writer.writerow(['DESCRIPCION_COOP', 'CODIGO_FINNEGANS'])
             # Ejempos
-            writer.writerow(['RAV D/YEYO CARNE X 500 GR L', '10121C', 'CAJON', '36.0'])
+            writer.writerow(['RAV D/YEYO CARNE X 500 GR L', '10121C'])
 
     def _create_branches_template(self):
         logger.info(f"Creating branches template at {self.branches_csv}")

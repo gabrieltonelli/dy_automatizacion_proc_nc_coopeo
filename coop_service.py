@@ -68,6 +68,17 @@ class CoopPortalService:
             raise RuntimeError(f"Contenido no-PDF recibido para NC {nro}")
         return r.content
 
+    def listar_articulos(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene la lista de artículos/productos del proveedor actual.
+        Endpoint: /articulos/imagenes?filtro=0
+        """
+        url = f"{self.base_url}/articulos/imagenes"
+        params = {"filtro": "0"}
+        r = self.session.get(url, params=params, timeout=self.timeout)
+        r.raise_for_status()
+        return r.json().get("data") or []
+
 class CoopParser:
     @staticmethod
     def normalizar_importe_ar(s: Optional[str]) -> Optional[float]:

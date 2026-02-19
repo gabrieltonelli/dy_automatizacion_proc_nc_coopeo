@@ -76,7 +76,18 @@ python main.py --solo-descarga
 
 # Ejemplo completo: Limpiar, filtrar proveedor y simular
 python main.py --limpiar --solo-prov 7150 --dry-run
+
+# Sincronizar catálogo de productos (standalone)
+python main.py --sync-catalog
 ```
+
+## Sincronización de Catálogo
+
+El comando `--sync-catalog` permite mantener actualizado `mappings/productos_coop.csv` automáticamente:
+1.  Se conecta al portal e itera por todos los proveedores asociados a la cuenta.
+2.  Obtiene la lista de productos vigentes.
+3.  Genera la descripción compuesta: `{Nombre} {Gramaje}.2f{Unidad}` (ej: "TAPA PASC HOJALD COOPERAT 400.00grs").
+4.  Si el producto no existe en el CSV, lo agrega al final con el código de Finnegans en blanco para que lo completes.
 
 ## Pruebas de Conexión (Finnegans)
 
