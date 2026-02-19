@@ -1,121 +1,109 @@
-# Pipeline de Solicitudes de Nota de Crédito (Coop. Obrera)
+# Pipeline de Notas de Crédito (Coop -> Finnegans)
 
-Este script automatiza la descarga, procesamiento y envío de Solicitudes de Nota de Crédito (NC) desde el portal de proveedores de la Cooperativa Obrera hacia tu sistema ERP/API.
+Este proyecto automatiza la descarga de Solicitudes de Notas de Crédito (NC) desde el portal de proveedores de Cooperativa Obrera y su posterior carga en el ERP Finnegans.
 
-## 🚀 Funcionalidades
+## Arquitectura Modular
 
-1.  **Login Automático**: Autenticación segura con hash SHA-256.
-2.  **Gestión de Sesión**: Reutilización de cookies y manejo de múltiples proveedores.
-3.  **Descarga de PDFs**: Obtención automática de comprobantes dentro de un rango de fechas.
-4.  **Extracción de Texto**: Conversión de PDF a texto plano (`.txt`) para análisis.
-5.  **Parseo Inteligente**: Identificación de metadatos (fechas, importes) y exportación a JSON (`.json`).
-6.  **Envío a API**: POST de la información extraída a un endpoint configurable.
-7.  **Organización de Archivos**: Clasificación automática en `espera`, `Procesados` y `Procesados con Error`.
-8.  **Logging Detallado**: Registro completo de actividad en consola y CSV (`NC_Log.csv`), con resumen final estadístico.
+El sistema está dividido en dos grandes fases coordinadas por un único punto de entrada (`main.py`):
 
-## 📋 Requisitos
+1.  **Fase 1: Extracción (Coop Service)**
+    *   Se conecta al portal de la Coop.
+    *   Descarga los PDFs de las NCs de los últimos N días o rango específico.
+    *   Extrae el texto y genera archivos JSON en `SolicitudNCCoop/datos_parseados`.
+2.  **Fase 2: Integración (Finnegans Processor)**
+    *   Lee los JSONs generados.
+    *   Traduce los datos al formato de Finnegans usando reglas de negocio (0271, 0272, etc.).
+    *   Busca facturas de referencia en Finnegans para aplicar la NC correctamente.
+    *   Carga el documento final en Finnegans. (Soporta simulación con `--dry-run`).
 
--   Python 3.9 o superior
--   Librerías Python:
-    ```bash
-    pip install requests PyPDF2 python-dotenv
-    ```
-    *(Nota: `python-dotenv` es opcional; el script incluye un lector manual de `.env` como fallback.)*
+## Requisitos
 
-## ⚙️ Configuración
+*   Python 3.9+
+*   Dependencias: `pip install -r requirements.txt`
 
-Crea un archivo `.env` en el mismo directorio del script con tus credenciales y preferencias:
+## Configuración (.env)
+
+Asegúrate de tener un archivo `.env` con las siguientes claves:
 
 ```env
-# Credenciales del Portal de Proveedores
-PORTAL_USER=tu_email@ejemplo.com
-PLAIN_PASSWORD=tu_password_real
+# Credenciales Portal Cooperativa Obrera
+PORTAL_USER=usuario@ejemplo.com.ar
+PLAIN_PASSWORD=tu_password_aqui
 
-# Configuración del Pipeline
-DIAS_HACIA_ATRAS=10       # Ventana de días a procesar por defecto
-REINTENTOS=3              # Reintentos HTTP
-BACKOFF=0.5               # Espera entre reintentos (segundos)
+# Credenciales API Finnegans
+FINNEGANS_CLIENT_ID=tu_client_id
+FINNEGANS_CLIENT_SECRET=tu_client_secret
+FINNEGANS_EMPRESA_COD=EMPRE01  # <--- Setea aquí la empresa destino
 
-# Endpoint de Destino (Tu ERP/API)
-POST_DESTINO_URL=https://api.tu-sistema.local/ingreso_nc
-POST_DESTINO_TOKEN=tu_token_opcional
+# Configuración de Red / API
+BASE_URL=https://proveedoresback.cooperativaobrera.coop
+HTTP_TIMEOUT=30
+REINTENTOS=3
+BACKOFF=0.5
 
-# Directorio de Salida (Opcional)
-OUT_DIR=./outputs
+# Parámetros de Proceso
+DIAS_HACIA_ATRAS=15
 ```
 
-## Procesamiento Incremental
+## Mapeos (CSV)
 
-El script mantiene un registro de los comprobantes procesados exitosamente en el archivo:
-`outputs/logs/historial_procesados.csv` (ruta por defecto).
+Mantén actualizados los archivos en `mappings/`:
+*   `productos_coop.csv`: Relaciona la descripción de la Coop con el código de Finnegans.
+*   `sucursales_coop.csv`: Mapea el prefijo de recepción al código de cliente Finnegans.
 
-**Funcionamiento:**
-1.  **Evita duplicados:** Si un comprobante ya figura en este archivo, el script lo saltará (a menos que uses `--doc-filter`).
-2.  **Registro:** Al finalizar correctamente un comprobante, se agrega una nueva línea al archivo.
-3.  **Edición Manual:** Si necesitas reprocesar un documento específico, abre este archivo (con Excel o Bloc de Notas) y borra la línea correspondiente.
-4.  **Auto-Limpieza:** En cada ejecución, el script elimina automáticamente los registros muy antiguos (basado en `--dias-hacia-atras` * 2) para mantener el archivo ligero.
+## Uso y Parametrización
 
-NO borres este archivo si quieres mantener el historial de lo que ya se hizo. Si lo borras, el script intentará procesar todo de nuevo (respetando la ventana de fechas).
-
-## Uso básico
-
-Ejecutar el script directamente para procesar los últimos `N` días (según `.env`):
-
-```bash
-python solicitudes_nc_pipeline.py
-```
-
-### Opciones Avanzadas (CLI)
-
-Puedes anular la configuración por defecto usando argumentos:
+Para ejecutar el flujo completo con diversas opciones:
 
 ```bash
 # Procesar rango de fechas específico
-python solicitudes_nc_pipeline.py --desde 2024-01-01 --hasta 2024-01-31
+python main.py --desde 2024-01-01 --hasta 2024-01-31
 
 # Filtrar un solo proveedor
-python solicitudes_nc_pipeline.py --solo-prov 12345
+python main.py --prov 12345
 
 # Filtrar documentos específicos (lista separada por comas)
-python solicitudes_nc_pipeline.py --doc-filter 27200375198,27200375199
+python main.py --doc-filter 27200375198,27200375199
 
-# Limpiar directorios de salida y logs antes de iniciar
-python solicitudes_nc_pipeline.py --limpiar
+# Limpiar directorios de salida antes de iniciar
+python main.py --limpiar
 
-# Simulación (descarga y procesa pero NO envía a la API destino)
-python solicitudes_nc_pipeline.py --dry-run
+# Simulación (descargar y procesa pero NO envía a Finnegans)
+python main.py --dry-run
 
-# Solo descargar los archivos PDF (sin procesarlos ni parsearlos)
-python solicitudes_nc_pipeline.py --solo-descarga
+# Solo descargar los archivos PDF (sin procesar con Finnegans)
+python main.py --solo-descarga
 
-# Ejemplo completo: Limpiar, filtrar documentos específicos de un proveedor y simular
-python solicitudes_nc_pipeline.py --limpiar --doc-filter 27200375198,27200374851 --solo-prov 7150 --dry-run
+# Ejemplo completo: Limpiar, filtrar proveedor y simular
+python main.py --limpiar --solo-prov 7150 --dry-run
 ```
 
-Para ver todas las opciones disponibles:
+## Pruebas de Conexión (Finnegans)
+
+Para validar únicamente la conectividad con la API de Finnegans sin procesar datos de la Cooperativa, puedes utilizar el script de diagnóstico:
+
 ```bash
-python solicitudes_nc_pipeline.py --help
+python test_finnegans.py
 ```
 
-## 📂 Estructura de Salida
+Este script verificará:
+1.  Obtención de un Token de acceso válido.
+2.  Acceso al reporte de facturas (`APICONSULTAFACTURAVENTADY`).
+3.  Búsqueda de una factura de muestra para confirmar permisos de lectura.
 
-El script genera automáticamente la siguiente estructura en `OUT_DIR` (por defecto `./outputs`):
+## Logs y Trazabilidad
 
-```
-outputs/
-├── espera/                 # Archivos temporales durante la descarga
-├── Procesados/             # PDFs procesados exitosamente
-├── Procesados con Error/   # PDFs que fallaron (descarga, extracción o envío)
-├── textos_extraidos/       # Contenido crudo de los PDFs (.txt)
-├── datos_parseados/        # Metadatos extraídos en formato manipulable (.json)
-└── logs/                   # Historial de ejecuciones (NC_Log.csv) y logs técnicos
-```
+El sistema genera trazabilidad detallada para auditoría y resolución de errores:
 
-## 📊 Logs y Monitoreo
+*   **`pipeline_ejecucion.log`**: Contiene el detalle paso a paso de lo que está ocurriendo (Log de Consola + Archivo). Aquí verás si un PDF no pudo parsearse o si la API de Finnegans devolvió un error.
+*   **Directorios de Estado**:
+    *   `SolicitudNCCoop/datos_parseados`: JSONs recién extraídos pendientes de envío.
+    *   `SolicitudNCCoop/Finnegans_OK`: JSONs que fueron creados exitosamente en Finnegans.
+    *   `SolicitudNCCoop/Finnegans_Error`: JSONs que fallaron durante la fase de integración.
 
--   **Consola**: Muestra el progreso en tiempo real y un **resumen final** con estadísticas de éxito.
--   **NC_Log.csv**: Registro histórico de cada comprobante procesado (timestamp, proveedor, archivo, estado, mensaje).
+## Extensibilidad (La Anónima, etc.)
 
-### 🛠️ Staging Local (Robustez)
-Para evitar errores de "Función incorrecta" o "Ruta no encontrada" comunes en unidades virtuales (como Google Drive `G:`), el script utiliza una carpeta local temporal `./temp_staging`. 
-Los archivos se descargan y procesan localmente y solo se mueven al destino final (`OK_DIR`) una vez completados con éxito. Esto garantiza la integridad de los datos y la compatibilidad con unidades virtuales.
+La arquitectura actual está preparada para crecer:
+1.  **Nuevos Portales:** Para agregar "La Anónima", basta con crear un `anonima_service.py` que herede/imite a `coop_service.py`.
+2.  **Nuevos Traductores:** Si La Anónima tiene un formato distinto, se crea un `anonima_translator.py` para mapear sus campos a los `models.py` universales.
+3.  **Mismo Destino:** Ambos usarán el mismo `FinnegansService` y `FinnegansProcessor`.
