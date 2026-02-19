@@ -95,6 +95,11 @@ def main():
     JSON_DIR = os.getenv("JSON_DIR", os.path.join(BASE_DIR, "SolicitudNCCoop", "datos_parseados"))
     SUCCESS_DIR = os.path.join(os.path.dirname(JSON_DIR), "Finnegans_OK")
     ERROR_DIR = os.path.join(os.path.dirname(JSON_DIR), "Finnegans_Error")
+    
+    # Directorios de Archivo (PDF y TXT) - No se limpian automaticamente
+    PDF_DIR = os.getenv("PDF_DIR")
+    TEXTOS_DIR = os.getenv("TEXTOS_DIR")
+    
     MAPPINGS_DIR = os.path.join(BASE_DIR, "mappings")
     
     if args.limpiar:
@@ -106,6 +111,9 @@ def main():
     os.makedirs(JSON_DIR, exist_ok=True)
     os.makedirs(SUCCESS_DIR, exist_ok=True)
     os.makedirs(ERROR_DIR, exist_ok=True)
+    
+    if PDF_DIR: os.makedirs(PDF_DIR, exist_ok=True)
+    if TEXTOS_DIR: os.makedirs(TEXTOS_DIR, exist_ok=True)
 
     # Credenciales Coop
     COOP_USER = os.getenv("PORTAL_USER")
@@ -176,6 +184,18 @@ def main():
                         "timestamp_extraido": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
                     
+                    # Guardar PDF si esta configurado
+                    if PDF_DIR:
+                        pdf_path = os.path.join(PDF_DIR, f"NC_{prov_id}_{nro}.pdf")
+                        with open(pdf_path, "wb") as f:
+                            f.write(pdf_bytes)
+                    
+                    # Guardar TXT si esta configurado
+                    if TEXTOS_DIR:
+                        txt_path = os.path.join(TEXTOS_DIR, f"NC_{prov_id}_{nro}.txt")
+                        with open(txt_path, "w", encoding="utf-8") as f:
+                            f.write(text)
+
                     with open(target_path, "w", encoding="utf-8") as f:
                         json.dump(final_json, f, indent=2, ensure_ascii=False)
                     total_descargados += 1

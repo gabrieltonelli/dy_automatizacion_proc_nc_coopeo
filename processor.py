@@ -45,6 +45,12 @@ class FinnegansProcessor:
         results = []
         for p in payloads:
             final_json = self._build_finnegans_payload_v3(p)
+            
+            # DEBUG: Guardar payload enviado para inspeccionar
+            debug_path = path + f".{p.cabecera.cliente_cod}.sent"
+            with open(debug_path, "w", encoding="utf-8") as f:
+                json.dump(final_json, f, indent=2)
+
             logger.info(f"Sending NC {p.cabecera.descripcion} for client {p.cabecera.cliente_cod} to Finnegans...")
             
             if self.dry_run:
@@ -122,7 +128,7 @@ class FinnegansProcessor:
             data["Items"].append({
                 "Cantidad2": item.cantidad,
                 "USR_DescParticular": 0,
-                "PrecioBase": item.precio_unitario - item.iva_unitario,
+                "PrecioBase": item.precio_unitario,
                 "UnidadIDPresentacion": None,
                 "CantidadPresentacion": item.cantidad_presentacion,
                 "DepositoOrigenCodigo": "EXPEDICION ELGUEA ROMAN",
@@ -131,7 +137,7 @@ class FinnegansProcessor:
                 "USRMotivoDevolucionID": item.motivo_devolucion_id,
                 "Cantidad": item.cantidad_presentacion,
                 "Descripcion": item.descripcion,
-                "Precio": item.precio_unitario - item.iva_unitario,
+                "Precio": item.precio_unitario,
                 "DimensionDistribucion": [
                     {
                         "tipoCalculo": "0",

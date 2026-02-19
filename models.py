@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 from datetime import datetime
@@ -18,15 +19,15 @@ class NCItem:
 class NCCabecera:
     fecha: str
     cliente_cod: str
-    condicion_pago: str = "30"
-    vendedor_cod: str = "MONTELEONE EDUARDO"
-    intermediario_cod: str = "17249"
-    empresa_cod: str = "EMPRE01"
+    condicion_pago: str = os.getenv("FINNEGANS_CONDICION_PAGO", "30")
+    vendedor_cod: str = os.getenv("FINNEGANS_VENDEDOR_COD", "MONTELEONE EDUARDO")
+    intermediario_cod: str = os.getenv("FINNEGANS_INTERMEDIARIO_COD", "17249")
+    empresa_cod: str = os.getenv("FINNEGANS_EMPRESA_COD", "EMPRE01")
     identificacion_externa: Optional[str] = None
     descripcion: str = ""
     tipocomp_coop: str = ""
     factura_referencia_id: Optional[str] = None
-    lista_precio_cod: str = "3"
+    lista_precio_cod: str = os.getenv("FINNEGANS_LISTA_PRECIO_COD", "3")
 
 @dataclass
 class NCPayload:
