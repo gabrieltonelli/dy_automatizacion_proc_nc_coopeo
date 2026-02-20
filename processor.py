@@ -52,7 +52,7 @@ class FinnegansProcessor:
                 json.dump(final_json, f, indent=2)
 
             logger.info(f"Sending NC {p.cabecera.descripcion} for client {p.cabecera.cliente_cod} to Finnegans...")
-            
+            #logger.info(f"--->final_json: {final_json}")
             if self.dry_run:
                 logger.info(f"[DRY-RUN] Simulating sending NC {p.cabecera.descripcion}")
                 results.append(True)
@@ -130,12 +130,12 @@ class FinnegansProcessor:
                 "USR_DescParticular": 0,
                 "PrecioBase": item.precio_unitario,
                 "UnidadIDPresentacion": None,
-                "CantidadPresentacion": item.cantidad_presentacion,
+                "CantidadPresentacion": None,
                 "DepositoOrigenCodigo": "EXPEDICION ELGUEA ROMAN",
                 "ProductoCodigo": str(item.producto_codigo_finnegans),
                 "Descuento1": 0,
                 "USRMotivoDevolucionID": item.motivo_devolucion_id,
-                "Cantidad": item.cantidad_presentacion,
+                "Cantidad": item.cantidad,
                 "Descripcion": item.descripcion,
                 "Precio": item.precio_unitario,
                 "DimensionDistribucion": [

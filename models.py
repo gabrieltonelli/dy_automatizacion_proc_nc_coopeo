@@ -27,7 +27,7 @@ class NCCabecera:
     descripcion: str = ""
     tipocomp_coop: str = ""
     factura_referencia_id: Optional[str] = None
-    lista_precio_cod: str = os.getenv("FINNEGANS_LISTA_PRECIO_COD", "3")
+    lista_precio_cod: Optional[str] = os.getenv("FINNEGANS_LISTA_PRECIO_COD", None)
 
 @dataclass
 class NCPayload:

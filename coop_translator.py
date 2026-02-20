@@ -119,20 +119,20 @@ class CoopTranslator:
                 unit = prod_info['unit']
                 multiplier = prod_info['multiplier']
 
+            neto_total = it.get("neto", 0.0) or 0.0
+            cantidad_pdf = it.get("cantidad", 1.0) or 1.0
             iva_total = it.get("iva", 0.0) or 0.0
-            cantidad = it.get("cantidad", 1.0) or 1.0
-            iva_unitario = iva_total / cantidad
 
             nc_item = NCItem(
-                cantidad=cantidad / multiplier,
-                precio_unitario=it.get("neto", 0.0) / cantidad if cantidad else 0.0,
+                cantidad=cantidad_pdf,
+                precio_unitario=neto_total / cantidad_pdf if cantidad_pdf else 0.0,
                 unidad=unit,
                 descripcion=it.get("descripcion", ""),
                 producto_codigo_finnegans=prod_code,
                 motivo_devolucion_id="16",
-                cantidad_presentacion=it.get("cantidad", 0.0),
-                neto_linea=it.get("neto", 0.0),
-                iva_unitario=iva_unitario
+                cantidad_presentacion=cantidad_pdf,
+                neto_linea=neto_total,
+                iva_unitario=iva_total
             )
             
             if client_cod not in by_client:
@@ -198,20 +198,20 @@ class CoopTranslator:
             unit = prod_info['unit'] if prod_info else "UN"
             multiplier = prod_info['multiplier'] if prod_info else 1.0
 
+            neto_total = it.get("neto", 0.0) or 0.0
+            cantidad_pdf = it.get("cantidad", 1.0) or 1.0
             iva_total = it.get("iva", 0.0) or 0.0
-            cantidad = it.get("cantidad", 1.0) or 1.0
-            iva_unitario = iva_total / cantidad
 
             items_fin.append(NCItem(
-                cantidad=cantidad / multiplier,
-                precio_unitario=it.get("neto", 0.0) / cantidad if cantidad else 0.0,
+                cantidad=cantidad_pdf,
+                precio_unitario=neto_total / cantidad_pdf if cantidad_pdf else 0.0,
                 unidad=unit,
                 descripcion=it.get("descripcion", ""),
                 producto_codigo_finnegans=prod_code,
                 motivo_devolucion_id="14",
-                cantidad_presentacion=it.get("cantidad", 0.0),
-                neto_linea=it.get("neto", 0.0),
-                iva_unitario=iva_unitario
+                cantidad_presentacion=cantidad_pdf,
+                neto_linea=neto_total,
+                iva_unitario=iva_total
             ))
             
         return NCPayload(cabecera, items_fin)
