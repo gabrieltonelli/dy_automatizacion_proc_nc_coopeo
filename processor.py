@@ -29,13 +29,19 @@ class FinnegansProcessor:
         files = [f for f in os.listdir(self.json_dir) if f.endswith(".json")]
         logger.info(f"Found {len(files)} JSON files to process.")
 
+        stats = {"ok": 0, "error": 0}
         for filename in files:
             path = os.path.join(self.json_dir, filename)
             try:
-                self._process_file(path, filename)
+                if self._process_file(path, filename):
+                    stats["ok"] += 1
+                else:
+                    stats["error"] += 1
             except Exception as e:
                 logger.error(f"Error processing {filename}: {e}", exc_info=True)
                 shutil.move(path, os.path.join(self.error_dir, filename))
+                stats["error"] += 1
+        return stats
 
     def _process_file(self, path: str, filename: str):
         with open(path, 'r', encoding='utf-8') as f:
@@ -80,8 +86,10 @@ class FinnegansProcessor:
 
         if all(results):
             shutil.move(path, os.path.join(self.success_dir, filename))
+            return True
         else:
             shutil.move(path, os.path.join(self.error_dir, filename))
+            return False
 
     @staticmethod
     def _format_nro_comprobante(nro: str) -> str:
