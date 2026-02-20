@@ -12,12 +12,13 @@ logger = logging.getLogger(__name__)
 
 class FinnegansProcessor:
     def __init__(self, finnegans: FinnegansService, translator: CoopTranslator, 
-                 json_dir: str, success_dir: str, error_dir: str, dry_run: bool = False):
+                 json_dir: str, success_dir: str, error_dir: str, history=None, dry_run: bool = False):
         self.finnegans = finnegans
         self.translator = translator
         self.json_dir = json_dir
         self.success_dir = success_dir
         self.error_dir = error_dir
+        self.history = history
         self.dry_run = dry_run
 
     def run(self):
@@ -62,6 +63,17 @@ class FinnegansProcessor:
             if resp['status'] == 200:
                 logger.info(f"✓ Success creating NC in Finnegans. Response: {resp['body'][:100]}")
                 results.append(True)
+                
+                # Registrar en historial CSV si tenemos el objeto
+                if self.history:
+                    # Intentar extraer el prov_id del nombre del archivo (NC_PROV_NRO.json)
+                    try:
+                        parts = filename.replace(".json", "").split("_")
+                        prov_id = parts[1] if len(parts) >= 2 else "0"
+                        # Extraer tipo y letra del payload cargado arriba (data)
+                        self.history.add(prov_id, p.cabecera.descripcion, p.cabecera.fecha, data.get("tipocomp", "272"), data.get("letra", ""))
+                    except Exception as he:
+                        logger.warning(f"No se pudo registrar en historial: {he}")
             else:
                 logger.error(f"✗ Failed to create NC. Status: {resp['status']}. Body: {resp['body']}")
                 results.append(False)

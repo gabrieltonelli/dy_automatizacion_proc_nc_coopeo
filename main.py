@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from coop_service import CoopPortalService, CoopParser
 from finnegans_service import FinnegansService
-from repository import MappingRepository
+from repository import MappingRepository, ProcessingHistory
 from coop_translator import CoopTranslator
 from processor import FinnegansProcessor
 
@@ -92,18 +92,24 @@ def main():
         return # Finalizar ejecucion si --sync-catalog esta presente
 
     # --- CONFIGURACION RESTANTE (Solo si no es sync standalone) ---
-    JSON_DIR = os.getenv("JSON_DIR", os.path.join(BASE_DIR, "SolicitudNCCoop", "datos_parseados"))
-    SUCCESS_DIR = os.path.join(os.path.dirname(JSON_DIR), "Finnegans_OK")
-    ERROR_DIR = os.path.join(os.path.dirname(JSON_DIR), "Finnegans_Error")
+    BASE_OUTPUT = os.path.join(BASE_DIR, "SolicitudNCCoop")
+    
+    JSON_DIR = os.getenv("JSON_DIR", os.path.join(BASE_OUTPUT, "datos_parseados"))
+    SUCCESS_DIR = os.path.join(BASE_OUTPUT, "Finnegans_OK")
+    ERROR_DIR = os.path.join(BASE_OUTPUT, "Finnegans_Error")
     
     # Directorios de Archivo (PDF y TXT) - No se limpian automaticamente
-    PDF_DIR = os.getenv("PDF_DIR")
-    TEXTOS_DIR = os.getenv("TEXTOS_DIR")
+    PDF_DIR = os.getenv("PDF_DIR", os.path.join(BASE_OUTPUT, "PDFs"))
+    TEXTOS_DIR = os.getenv("TEXTOS_DIR", os.path.join(BASE_OUTPUT, "textos_extraidos"))
+    LOGS_DIR = os.getenv("LOGS_DIR", os.path.join(BASE_OUTPUT, "logs"))
     
     MAPPINGS_DIR = os.path.join(BASE_DIR, "mappings")
     
+    # Historial de Procesados (CSV para idempotencia)
+    history = ProcessingHistory(os.path.join(LOGS_DIR, "historial_procesados.csv"))
+    
     if args.limpiar:
-        logger.info(f"Limpiando directorios: {JSON_DIR}, {SUCCESS_DIR}, {ERROR_DIR}")
+        logger.info(f"Limpiando directorios temporales: {JSON_DIR}, {SUCCESS_DIR}, {ERROR_DIR}")
         for d in [JSON_DIR, SUCCESS_DIR, ERROR_DIR]:
             if os.path.exists(d):
                 shutil.rmtree(d, ignore_errors=True)
@@ -111,6 +117,7 @@ def main():
     os.makedirs(JSON_DIR, exist_ok=True)
     os.makedirs(SUCCESS_DIR, exist_ok=True)
     os.makedirs(ERROR_DIR, exist_ok=True)
+    os.makedirs(LOGS_DIR, exist_ok=True)
     
     if PDF_DIR: os.makedirs(PDF_DIR, exist_ok=True)
     if TEXTOS_DIR: os.makedirs(TEXTOS_DIR, exist_ok=True)
@@ -156,6 +163,13 @@ def main():
             for nc in ncs:
                 nro = str(nc.get("nro_comprobante"))
                 
+                # 1. Chequeo de Idempotencia via CSV
+                tipocomp = nc.get("tipocomp", "272")
+                letra = nc.get("letra", "")
+                if history.is_processed(prov_id, nro, tipocomp, letra):
+                    logger.info(f"NC {nro} ya procesada según historial CSV. Saltando...")
+                    continue
+
                 # Filtro por documento
                 if doc_filter_list and nro not in doc_filter_list:
                     continue
@@ -222,11 +236,10 @@ def main():
         translator=translator,
         json_dir=JSON_DIR,
         success_dir=SUCCESS_DIR,
-        error_dir=ERROR_DIR
+        error_dir=ERROR_DIR,
+        history=history # Inyectamos el historial
     )
     
-    # Le pasamos el dry-run al processor (necesitamos actualizar processor.py para que reciba dry-run si no existia)
-    # Por ahora el processor.py no tiene dry-run en su constructor, vamos a actualizarlo tambien.
     processor.dry_run = args.dry_run
     processor.run()
     logger.info("--- PIPELINE FINALIZADO ---")

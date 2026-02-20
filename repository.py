@@ -81,3 +81,76 @@ class MappingRepository:
             writer.writerow(['PREFIJO', 'CLIENTE_FINNEGANS'])
             # Ejemplos
             writer.writerow(['0270', '15603'])
+
+from typing import List, Set, Tuple
+from datetime import datetime
+
+class ProcessingHistory:
+    """
+    Gestiona un archivo CSV con el historial de comprobantes procesados exitosamente.
+    """
+    def __init__(self, csv_path: str):
+        self.csv_path = csv_path
+        self.procesados: Set[Tuple[str, str, str, str]] = set() # (prov, tipo, letra, nro)
+        self.fieldnames = ["PROVEEDOR", "TIPO", "LETRA", "NRO_COMPROBANTE", "FECHA_COMPROBANTE", "FECHA_PROCESADO"]
+        self._load()
+
+    def _load(self):
+        if not os.path.exists(self.csv_path):
+            return
+        
+        try:
+            with open(self.csv_path, "r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f, delimiter=";")
+                for row in reader:
+                    # Clave única: Prov + Tipo + Letra + Nro
+                    key = (
+                        row.get("PROVEEDOR", "").strip(),
+                        row.get("TIPO", "").strip(),
+                        row.get("LETRA", "").strip(),
+                        row.get("NRO_COMPROBANTE", "").strip()
+                    )
+                    self.procesados.add(key)
+        except Exception as e:
+            logger.warning(f"Error leyendo historial CSV: {e}")
+
+    def is_processed(self, prov: str, nro: str, tipo: str = "", letra: str = "") -> bool:
+        # Intentar match con o sin tipo/letra para ser flexible
+        if (str(prov), str(tipo), str(letra), str(nro)) in self.procesados:
+            return True
+        # Fallback para archivos antiguos que solo tenian prov/nro (si los hubiera)
+        return False
+
+    def add(self, prov: str, nro: str, fecha_comp: str, tipo: str = "272", letra: str = ""):
+        key = (str(prov), str(tipo), str(letra), str(nro))
+        if key in self.procesados:
+            return
+        self.procesados.add(key)
+        
+        file_exists = os.path.exists(self.csv_path)
+        os.makedirs(os.path.dirname(self.csv_path), exist_ok=True)
+        try:
+            # Si el archivo existe pero esta vacio o tiene basura, escribir header
+            write_header = not file_exists or os.path.getsize(self.csv_path) == 0
+            
+            with open(self.csv_path, "a", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=self.fieldnames, delimiter=";")
+                if write_header:
+                    writer.writeheader()
+                else:
+                    # Asegurar que empezamos en linea nueva si el archivo no terminaba en newline
+                    f.seek(0, os.SEEK_END)
+                    # No podemos chequear facilmente el ultimo caracter sin leer, 
+                    # pero DictWriter hara el append. 
+                    pass
+
+                writer.writerow({
+                    "PROVEEDOR": prov,
+                    "TIPO": tipo,
+                    "LETRA": letra,
+                    "NRO_COMPROBANTE": nro,
+                    "FECHA_COMPROBANTE": fecha_comp,
+                    "FECHA_PROCESADO": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                })
+        except Exception as e:
+            logger.error(f"No se pudo escribir en historial CSV: {e}")

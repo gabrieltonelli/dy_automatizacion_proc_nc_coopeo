@@ -102,15 +102,65 @@ Este script verificará:
 2.  Acceso al reporte de facturas (`APICONSULTAFACTURAVENTADY`).
 3.  Búsqueda de una factura de muestra para confirmar permisos de lectura.
 
-## Logs y Trazabilidad
+## Estructura de Directorios y Flujo de Trabajo
 
-El sistema genera trazabilidad detallada para auditoría y resolución de errores:
+El sistema utiliza una estructura de carpetas organizada bajo `SolicitudNCCoop/` para garantizar la trazabilidad y permitir el reprocesamiento manual.
 
-*   **`pipeline_ejecucion.log`**: Contiene el detalle paso a paso de lo que está ocurriendo (Log de Consola + Archivo). Aquí verás si un PDF no pudo parsearse o si la API de Finnegans devolvió un error.
-*   **Directorios de Estado**:
-    *   `SolicitudNCCoop/datos_parseados`: JSONs recién extraídos pendientes de envío.
-    *   `SolicitudNCCoop/Finnegans_OK`: JSONs que fueron creados exitosamente en Finnegans.
-    *   `SolicitudNCCoop/Finnegans_Error`: JSONs que fallaron durante la fase de integración.
+### Diagrama de Secuencia
+```mermaid
+sequenceDiagram
+    participant U as Usuario
+    participant M as main.py
+    participant C as Coop Service
+    participant R as Repository (CSV)
+    participant P as Finnegans Processor
+    participant F as Finnegans API
+
+    U->>M: Ejecuta script
+    M->>R: Carga historial_procesados.csv
+    M->>C: Lista solicitudes NC
+    loop Por cada NC encontrada
+        M->>R: ¿Ya fue procesada?
+        alt NO Procesada
+            M->>C: Descarga PDF
+            C-->>M: PDF Bytes
+            M->>M: Guarda en PDFs/
+            M->>M: Extrae Texto -> Guarda en textos_extraidos/
+            M->>M: Genera JSON -> Guarda en datos_parseados/
+        else YA Procesada
+            M->>M: Salta comprobante
+        end
+    end
+
+    M->>P: Inicia Fase de Integración
+    loop Por cada JSON en datos_parseados/
+        P->>P: Traduce a payload Finnegans
+        P->>F: POST /create_document
+        alt Éxito (200)
+            F-->>P: OK
+            P->>R: Registra en historial_procesados.csv
+            P->>P: Mueve JSON a Finnegans_OK/
+        else Error
+            F-->>P: Error Log
+            P->>P: Mueve JSON a Finnegans_Error/
+        end
+    end
+    M-->>U: Fin del Proceso
+```
+
+### Detalle de Carpetas (`SolicitudNCCoop/`)
+
+| Carpeta | Propósito | Tiempo de Vida |
+| :--- | :--- | :--- |
+| `datos_parseados/` | JSONs listos para ser subidos. | Temporal (se mueven al procesar) |
+| `Finnegans_OK/` | Copia de seguridad de JSONs subidos con éxito. | Permanente |
+| `Finnegans_Error/` | JSONs que fallaron (revisar para corregir mapeos). | Permanente |
+| `PDFs/` | Archivo permanente de comprobantes originales. | Permanente |
+| `textos_extraidos/` | Respaldo del texto parseado de cada PDF. | Permanente |
+| `logs/` | Logs de ejecución y el archivo de historial. | Permanente |
+
+> [!TIP]
+> **Idempotencia y Reprocesamiento:** El archivo `SolicitudNCCoop/logs/historial_procesados.csv` es la fuente de verdad. Si necesitás volver a procesar un comprobante antiguo, simplemente **borrá la línea correspondiente** en ese CSV y ejecutá el script de nuevo.
 
 ## Extensibilidad (La Anónima, etc.)
 
