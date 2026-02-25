@@ -7,6 +7,7 @@ __pycache__/
 
 # Logs y Salidas del Pipeline
 SolicitudNCCoop/
+SolicitudNCLaAno/
 outputs/
 logs/
 *.log

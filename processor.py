@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 
 class FinnegansProcessor:
     def __init__(self, finnegans: FinnegansService, translator: CoopTranslator, 
-                 json_dir: str, success_dir: str, error_dir: str, history=None, dry_run: bool = False):
+                 json_dir: str, success_dir: str, error_dir: str, history=None, 
+                 dry_run: bool = False, excluded_clients: list = None):
         self.finnegans = finnegans
         self.translator = translator
         self.json_dir = json_dir
@@ -20,6 +21,7 @@ class FinnegansProcessor:
         self.error_dir = error_dir
         self.history = history
         self.dry_run = dry_run
+        self.excluded_clients = excluded_clients or []
 
     def run(self):
         logger.info(f"Starting Finnegans processing from {self.json_dir}")
@@ -51,14 +53,20 @@ class FinnegansProcessor:
         
         results = []
         for p in payloads:
+            client_cod = str(p.cabecera.cliente_cod)
+            if self.excluded_clients and client_cod in self.excluded_clients:
+                logger.info(f"Skipping NC {p.cabecera.descripcion} for client {client_cod} (Found in exclusion list)")
+                results.append(True) # Consider skipped as "processed" to avoid blocking the file
+                continue
+
             final_json = self._build_finnegans_payload_v3(p)
             
             # DEBUG: Guardar payload enviado para inspeccionar
-            debug_path = path + f".{p.cabecera.cliente_cod}.sent"
+            debug_path = path + f".{client_cod}.sent"
             with open(debug_path, "w", encoding="utf-8") as f:
                 json.dump(final_json, f, indent=2)
 
-            logger.info(f"Sending NC {p.cabecera.descripcion} for client {p.cabecera.cliente_cod} to Finnegans...")
+            logger.info(f"Sending NC {p.cabecera.descripcion} for client {client_cod} to Finnegans...")
             #logger.info(f"--->final_json: {final_json}")
             if self.dry_run:
                 logger.info(f"[DRY-RUN] Simulating sending NC {p.cabecera.descripcion}")

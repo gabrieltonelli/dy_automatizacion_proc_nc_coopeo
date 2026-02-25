@@ -279,13 +279,20 @@ def main():
         finnegans = FinnegansService(FINN_ID, FINN_SECRET)
         translator = CoopTranslator(repo, finnegans)
         
+        # Exclusión de clientes
+        excluded_clients_env = os.getenv("EXCLUSION_POR_CLIENTES", "")
+        excluded_clients = [x.strip() for x in excluded_clients_env.split(",") if x.strip()]
+        if excluded_clients:
+            logger.info(f"Clientes excluidos de procesamiento: {excluded_clients}")
+
         processor = FinnegansProcessor(
             finnegans=finnegans,
             translator=translator,
             json_dir=JSON_DIR,
             success_dir=SUCCESS_DIR,
             error_dir=ERROR_DIR,
-            history=history # Inyectamos el historial
+            history=history, # Inyectamos el historial
+            excluded_clients=excluded_clients
         )
         
         processor.dry_run = args.dry_run
