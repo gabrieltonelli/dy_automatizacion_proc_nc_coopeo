@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 class FinnegansProcessor:
     def __init__(self, finnegans: FinnegansService, translator: CoopTranslator, 
                  json_dir: str, success_dir: str, error_dir: str, history=None, 
-                 dry_run: bool = False, excluded_clients: list = None):
+                 dry_run: bool = False, excluded_clients: list = None,
+                 client_overwrites: dict = None):
         self.finnegans = finnegans
         self.translator = translator
         self.json_dir = json_dir
@@ -22,6 +23,7 @@ class FinnegansProcessor:
         self.history = history
         self.dry_run = dry_run
         self.excluded_clients = excluded_clients or []
+        self.client_overwrites = client_overwrites or {}
 
     def run(self):
         logger.info(f"Starting Finnegans processing from {self.json_dir}")
@@ -53,6 +55,13 @@ class FinnegansProcessor:
         
         results = []
         for p in payloads:
+            # Aplicar reemplazo de código de cliente si existe
+            original_client = str(p.cabecera.cliente_cod)
+            if original_client in self.client_overwrites:
+                new_client = self.client_overwrites[original_client]
+                logger.info(f"Reemplazando cliente {original_client} por {new_client} según configuración.")
+                p.cabecera.cliente_cod = new_client
+            
             client_cod = str(p.cabecera.cliente_cod)
             if self.excluded_clients and client_cod in self.excluded_clients:
                 logger.info(f"Skipping NC {p.cabecera.descripcion} for client {client_cod} (Found in exclusion list)")
