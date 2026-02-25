@@ -285,21 +285,14 @@ def main():
         if excluded_clients:
             logger.info(f"Clientes excluidos de procesamiento: {excluded_clients}")
 
-        # Reemplazo de clientes (Sobreescritura de código)
-        overwrite_env = os.getenv("REEMPLAZO_CLIENTES", "")
+        # Reemplazo de clientes (Sobreescritura de código X -> Y)
         client_overwrites = {}
-        if overwrite_env:
-            for pair in overwrite_env.split(","):
-                if ":" in pair:
-                    old, new = pair.split(":", 1)
-                    client_overwrites[old.strip()] = new.strip()
-        
-        # Soporte para variables individuales (tienen prioridad)
         target_client = os.getenv("CLIENTE_A_REEMPLAZAR")
         replacement_client = os.getenv("CLIENTE_REEMPLAZO")
+        
         if target_client and replacement_client:
             client_overwrites[target_client.strip()] = replacement_client.strip()
-            logger.info(f"Configurado reemplazo individual: {target_client} -> {replacement_client}")
+            logger.info(f"Configurado reemplazo de cliente: {target_client} -> {replacement_client}")
         
         if client_overwrites:
             logger.info(f"Mapeos de reemplazo de clientes activos: {client_overwrites}")

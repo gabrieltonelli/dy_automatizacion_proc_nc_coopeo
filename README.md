@@ -180,6 +180,18 @@ EXCLUSION_POR_CLIENTES=17249,17250
 > [!TIP]
 > **Idempotencia y Reprocesamiento:** El archivo `SolicitudNCCoop/logs/historial_procesados.csv` es la fuente de verdad. Si necesitás volver a procesar un comprobante antiguo, simplemente **borrá la línea correspondiente** en ese CSV y ejecutá el script de nuevo.
 
+## Reemplazo de Cliente (Sobrescritura)
+
+En casos donde una solicitud emitida para el **Cliente X** deba ser cargada en Finnegans para el **Cliente Y**, se puede configurar una regla de sobrescritura global en el `.env`:
+
+```env
+# Si el sistema detecta el cliente 17249, lo reemplaza por 20223 antes de enviar
+CLIENTE_A_REEMPLAZAR=17249
+CLIENTE_REEMPLAZO=20223
+```
+
+Esta funcionalidad es útil para centralizar solicitudes de múltiples sucursales en una sola cuenta corriente o corregir mapeos de forma dinámica sin alterar el código.
+
 ## Extensibilidad (La Anónima, etc.)
 
 La arquitectura actual está preparada para crecer:
