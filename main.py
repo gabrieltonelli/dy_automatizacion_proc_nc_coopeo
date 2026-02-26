@@ -276,8 +276,28 @@ def main():
     else:
         logger.info("--- INICIANDO FASE 2: INTEGRACION FINNEGANS ---")
         
+        # Configuración dinámica para Payloads y Traducciones
+        finn_config = {
+            # Payloads
+            "direccion_entrega": int(os.getenv("FINNEGANS_DIRECCION_ENTREGA", 5)),
+            "equipo_solicitante": os.getenv("FINNEGANS_EQUIPO_SOLICITANTE", "SOLICITUDNC"),
+            "workflow_codigo": os.getenv("FINNEGANS_WORKFLOW_CODIGO", "VENTAS"),
+            "provincia_origen_codigo": os.getenv("FINNEGANS_PROVINCIA_ORIGEN_COD", "BSAS"),
+            "tipo_impositivo_id": os.getenv("FINNEGANS_TIPO_IMPOSITIVO_ID", "003"),
+            "moneda_codigo": os.getenv("FINNEGANS_MONEDA_CODIGO", "PES"),
+            "transaccion_subtipo_codigo": os.getenv("FINNEGANS_SUBTIPO_CODIGO", "SOLICITUDNCAUTO"),
+            "transaccion_tipo_codigo": os.getenv("FINNEGANS_TRANSAC_TIPO_CODIGO", "OPER"),
+            "deposito_origen_codigo": os.getenv("FINNEGANS_DEPOSITO_ORIGEN_COD", "EXPEDICION ELGUEA ROMAN"),
+            "dimension_codigo": os.getenv("FINNEGANS_DIMENSION_CODIGO", "DIMCTC"),
+            # Traducciones/Motivos
+            "motivo_dif_precio": os.getenv("FINNEGANS_MOTIVO_DIF_PRECIO", "12"),
+            "motivo_devolucion": os.getenv("FINNEGANS_MOTIVO_DEVOLUCION", "16"),
+            "motivo_dif_cantidad": os.getenv("FINNEGANS_MOTIVO_DIF_CANTIDAD", "14"),
+            "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO")
+        }
+
         finnegans = FinnegansService(FINN_ID, FINN_SECRET)
-        translator = CoopTranslator(repo, finnegans)
+        translator = CoopTranslator(repo, finnegans, config=finn_config)
         
         # Exclusión de clientes
         excluded_clients_env = os.getenv("EXCLUSION_POR_CLIENTES", "")
@@ -305,7 +325,8 @@ def main():
             error_dir=ERROR_DIR,
             history=history, # Inyectamos el historial
             excluded_clients=excluded_clients,
-            client_overwrites=client_overwrites
+            client_overwrites=client_overwrites,
+            config=finn_config
         )
         
         processor.dry_run = args.dry_run

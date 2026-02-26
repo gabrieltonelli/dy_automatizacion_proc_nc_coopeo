@@ -9,9 +9,10 @@ from finnegans_service import FinnegansService
 logger = logging.getLogger(__name__)
 
 class CoopTranslator:
-    def __init__(self, repo: MappingRepository, finnegans: FinnegansService):
+    def __init__(self, repo: MappingRepository, finnegans: FinnegansService, config: dict = None):
         self.repo = repo
         self.finnegans = finnegans
+        self.config = config or {}
 
     def translate(self, json_data: Dict[str, Any]) -> List[NCPayload]:
         """
@@ -84,8 +85,8 @@ class CoopTranslator:
                 precio_unitario=it.get("neto", 0.0),
                 unidad="UN",
                 descripcion=it.get("descripcion", ""),
-                producto_codigo_finnegans="DIFERENCIA DE PRECIO",
-                motivo_devolucion_id="12",
+                producto_codigo_finnegans=self.config.get("prod_dif_precio", "DIFERENCIA DE PRECIO"),
+                motivo_devolucion_id=self.config.get("motivo_dif_precio", "12"),
                 cantidad_presentacion=1.0,
                 neto_linea=it.get("neto", 0.0)
             ))
@@ -129,7 +130,7 @@ class CoopTranslator:
                 unidad=unit,
                 descripcion=it.get("descripcion", ""),
                 producto_codigo_finnegans=prod_code,
-                motivo_devolucion_id="16",
+                motivo_devolucion_id=self.config.get("motivo_devolucion", "16"),
                 cantidad_presentacion=cantidad_pdf,
                 neto_linea=neto_total,
                 iva_unitario=iva_total
@@ -208,7 +209,7 @@ class CoopTranslator:
                 unidad=unit,
                 descripcion=it.get("descripcion", ""),
                 producto_codigo_finnegans=prod_code,
-                motivo_devolucion_id="14",
+                motivo_devolucion_id=self.config.get("motivo_dif_cantidad", "14"),
                 cantidad_presentacion=cantidad_pdf,
                 neto_linea=neto_total,
                 iva_unitario=iva_total

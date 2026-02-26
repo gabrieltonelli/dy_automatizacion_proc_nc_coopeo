@@ -45,8 +45,17 @@ BACKOFF=0.5
 # Parámetros de Proceso
 DIAS_HACIA_ATRAS=15
 
-# Filtros (Opcional)
+# Filtros y Reglas de Negocio (Opcional)
 EXCLUSION_POR_CLIENTES=17249,17250 # Códigos de clientes a NO procesar
+CLIENTE_A_REEMPLAZAR=17249       # Código original a buscar
+CLIENTE_REEMPLAZO=20223           # Código por el cual reemplazar
+
+# Configuración de Payloads Finnegans (Valores por defecto)
+FINNEGANS_DEPOSITO_ORIGEN_COD=EXPEDICION ELGUEA ROMAN
+FINNEGANS_MONEDA_CODIGO=PES
+FINNEGANS_WORKFLOW_CODIGO=VENTAS
+FINNEGANS_DIMENSION_CODIGO=DIMCTC
+FINNEGANS_MOTIVO_DEVOLUCION=16
 ```
 
 ## Mapeos (CSV)
