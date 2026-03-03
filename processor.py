@@ -58,10 +58,17 @@ class FinnegansProcessor:
         for p in payloads:
             # Aplicar reemplazo de código de cliente si existe
             original_client = str(p.cabecera.cliente_cod)
+            client_a_reemplazar = os.getenv("CLIENTE_A_REEMPLAZAR", "").strip()
+            client_reemplazo = os.getenv("CLIENTE_REEMPLAZO", "").strip()
+
             if original_client in self.client_overwrites:
                 new_client = self.client_overwrites[original_client]
                 logger.info(f"Reemplazando cliente {original_client} por {new_client} según configuración.")
                 p.cabecera.cliente_cod = new_client
+                
+                # Requerimiento: agregar texto a descripción si es el reemplazo específico
+                if original_client == client_a_reemplazar and new_client == client_reemplazo:
+                    p.cabecera.descripcion_extra = " (deriva de 6253 CDR)"
             
             client_cod = str(p.cabecera.cliente_cod)
             if self.excluded_clients and client_cod in self.excluded_clients:
@@ -152,7 +159,7 @@ class FinnegansProcessor:
             "MonedaCodigo": self.config.get("moneda_codigo", "PES"),
             "EmpresaCodigo": cab.empresa_cod,
             "TransaccionSubtipoCodigo": self.config.get("transaccion_subtipo_codigo", "SOLICITUDNCAUTO"),
-            "Descripcion": nro_formateado,
+            "Descripcion": f"{nro_formateado}{cab.descripcion_extra}",
             "VendedorCodigo": cab.vendedor_cod,
             "Cliente": cab.cliente_cod,
             "TransaccionTipoCodigo": self.config.get("transaccion_tipo_codigo", "OPER"),
