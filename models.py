@@ -25,6 +25,7 @@ class NCCabecera:
     empresa_cod: str = os.getenv("FINNEGANS_EMPRESA_COD", "EMPRE01")
     identificacion_externa: Optional[str] = None
     descripcion: str = ""
+    descripcion_extra: str = ""
     tipocomp_coop: str = ""
     factura_referencia_id: Optional[str] = None
     lista_precio_cod: Optional[str] = os.getenv("FINNEGANS_LISTA_PRECIO_COD", None)

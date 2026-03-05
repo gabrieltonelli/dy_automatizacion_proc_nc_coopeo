@@ -13,6 +13,7 @@ El sistema está dividido en dos grandes fases coordinadas por un único punto d
 2.  **Fase 2: Integración (Finnegans Processor)**
     *   Lee los JSONs generados.
     *   Traduce los datos al formato de Finnegans usando reglas de negocio (0271, 0272, etc.).
+    *   **Aplica filtros de exclusión**: Omite envíos para ciertos clientes configurados por entorno.
     *   Busca facturas de referencia en Finnegans para aplicar la NC correctamente.
     *   Carga el documento final en Finnegans. (Soporta simulación con `--dry-run`).
 
@@ -43,6 +44,18 @@ BACKOFF=0.5
 
 # Parámetros de Proceso
 DIAS_HACIA_ATRAS=15
+
+# Filtros y Reglas de Negocio (Opcional)
+EXCLUSION_POR_CLIENTES=17249,17250 # Códigos de clientes a NO procesar
+CLIENTE_A_REEMPLAZAR=17249       # Código original a buscar
+CLIENTE_REEMPLAZO=20223           # Código por el cual reemplazar
+
+# Configuración de Payloads Finnegans (Valores por defecto)
+FINNEGANS_DEPOSITO_ORIGEN_COD=EXPEDICION ELGUEA ROMAN
+FINNEGANS_MONEDA_CODIGO=PES
+FINNEGANS_WORKFLOW_CODIGO=VENTAS
+FINNEGANS_DIMENSION_CODIGO=DIMCTC
+FINNEGANS_MOTIVO_DEVOLUCION=16
 ```
 
 ## Mapeos (CSV)
@@ -159,8 +172,34 @@ sequenceDiagram
 | `textos_extraidos/` | Respaldo del texto parseado de cada PDF. | Permanente |
 | `logs/` | Logs de ejecución y el archivo de historial. | Permanente |
 
+## Filtros de Exclusión
+
+El sistema permite ignorar ciertos códigos de clientes durante el procesamiento hacia Finnegans. Esto es útil para evitar cargar sucursales o clientes específicos que no deban ser integrados automáticamente.
+
+Para configurar los clientes a excluir, usa la siguiente variable en tu `.env`:
+
+```env
+# Códigos de clientes a filtrar (separados por comas)
+EXCLUSION_POR_CLIENTES=17249,17250
+```
+
+> [!NOTE]
+> Cuando un cliente está en esta lista, el sistema descargará y parseará la NC (para registro histórico), pero **saltará el envío a Finnegans** y marcará el archivo como procesado exitosamente para evitar bloqueos en el pipeline.
+
 > [!TIP]
 > **Idempotencia y Reprocesamiento:** El archivo `SolicitudNCCoop/logs/historial_procesados.csv` es la fuente de verdad. Si necesitás volver a procesar un comprobante antiguo, simplemente **borrá la línea correspondiente** en ese CSV y ejecutá el script de nuevo.
+
+## Reemplazo de Cliente (Sobrescritura)
+
+En casos donde una solicitud emitida para el **Cliente X** deba ser cargada en Finnegans para el **Cliente Y**, se puede configurar una regla de sobrescritura global en el `.env`:
+
+```env
+# Si el sistema detecta el cliente 17249, lo reemplaza por 20223 antes de enviar
+CLIENTE_A_REEMPLAZAR=17249
+CLIENTE_REEMPLAZO=20223
+```
+
+Esta funcionalidad es útil para centralizar solicitudes de múltiples sucursales en una sola cuenta corriente o corregir mapeos de forma dinámica sin alterar el código.
 
 ## Extensibilidad (La Anónima, etc.)
 

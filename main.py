@@ -276,14 +276,46 @@ def main():
     else:
         logger.info("--- INICIANDO FASE 2: INTEGRACION FINNEGANS ---")
         
+        # Configuración dinámica para Payloads y Traducciones
+        finn_config = {
+            # Payloads
+            "direccion_entrega": int(os.getenv("FINNEGANS_DIRECCION_ENTREGA", 5)),
+            "equipo_solicitante": os.getenv("FINNEGANS_EQUIPO_SOLICITANTE", "SOLICITUDNC"),
+            "workflow_codigo": os.getenv("FINNEGANS_WORKFLOW_CODIGO", "VENTAS"),
+            "provincia_origen_codigo": os.getenv("FINNEGANS_PROVINCIA_ORIGEN_COD", "BSAS"),
+            "tipo_impositivo_id": os.getenv("FINNEGANS_TIPO_IMPOSITIVO_ID", "003"),
+            "moneda_codigo": os.getenv("FINNEGANS_MONEDA_CODIGO", "PES"),
+            "transaccion_subtipo_codigo": os.getenv("FINNEGANS_SUBTIPO_CODIGO", "SOLICITUDNCAUTO"),
+            "transaccion_tipo_codigo": os.getenv("FINNEGANS_TRANSAC_TIPO_CODIGO", "OPER"),
+            "deposito_origen_codigo": os.getenv("FINNEGANS_DEPOSITO_ORIGEN_COD", "EXPEDICION ELGUEA ROMAN"),
+            "dimension_codigo": os.getenv("FINNEGANS_DIMENSION_CODIGO", "DIMCTC"),
+            # Traducciones/Motivos
+            "motivo_dif_precio": os.getenv("FINNEGANS_MOTIVO_DIF_PRECIO", "12"),
+            "motivo_devolucion": os.getenv("FINNEGANS_MOTIVO_DEVOLUCION", "16"),
+            "motivo_dif_cantidad": os.getenv("FINNEGANS_MOTIVO_DIF_CANTIDAD", "14"),
+            "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO")
+        }
+
         finnegans = FinnegansService(FINN_ID, FINN_SECRET)
-        translator = CoopTranslator(repo, finnegans)
+        translator = CoopTranslator(repo, finnegans, config=finn_config)
         
         # Exclusión de clientes
         excluded_clients_env = os.getenv("EXCLUSION_POR_CLIENTES", "")
         excluded_clients = [x.strip() for x in excluded_clients_env.split(",") if x.strip()]
         if excluded_clients:
             logger.info(f"Clientes excluidos de procesamiento: {excluded_clients}")
+
+        # Reemplazo de clientes (Sobreescritura de código X -> Y)
+        client_overwrites = {}
+        target_client = os.getenv("CLIENTE_A_REEMPLAZAR")
+        replacement_client = os.getenv("CLIENTE_REEMPLAZO")
+        
+        if target_client and replacement_client:
+            client_overwrites[target_client.strip()] = replacement_client.strip()
+            logger.info(f"Configurado reemplazo de cliente: {target_client} -> {replacement_client}")
+        
+        if client_overwrites:
+            logger.info(f"Mapeos de reemplazo de clientes activos: {client_overwrites}")
 
         processor = FinnegansProcessor(
             finnegans=finnegans,
@@ -292,7 +324,9 @@ def main():
             success_dir=SUCCESS_DIR,
             error_dir=ERROR_DIR,
             history=history, # Inyectamos el historial
-            excluded_clients=excluded_clients
+            excluded_clients=excluded_clients,
+            client_overwrites=client_overwrites,
+            config=finn_config
         )
         
         processor.dry_run = args.dry_run
