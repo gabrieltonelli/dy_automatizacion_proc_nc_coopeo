@@ -53,7 +53,9 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
     if stats['detalles']:
         print("DETALLE POR PROVEEDOR:")
         for prov, d in stats['detalles'].items():
-            print(f"\n  [{prov}]")
+            nombre = d.get('nombre', '')
+            header = f"{prov} - {nombre}" if nombre else prov
+            print(f"\n  [{header}]")
             print(f"    - NC encontradas: {d['encontradas']}")
             print(f"    - Saltadas: {d['saltadas']}")
             print(f"    - Procesadas OK: {d['ok']}")
@@ -190,7 +192,8 @@ def main():
 
         for p_item in proveedores:
             prov_id = str(p_item.get("prov"))
-            stats["detalles"][prov_id] = {"encontradas": 0, "saltadas": 0, "ok": 0, "error": 0}
+            prov_nombre = p_item.get("nombre", "")
+            stats["detalles"][prov_id] = {"nombre": prov_nombre, "encontradas": 0, "saltadas": 0, "ok": 0, "error": 0}
             try:
                 logger.info(f"Procesando Proveedor {prov_id}...")
                 coop.seleccionar_proveedor(prov_id)
