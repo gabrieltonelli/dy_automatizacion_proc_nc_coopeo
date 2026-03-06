@@ -71,7 +71,12 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
     print(f"{sep}\n")
 
 def main():
-    load_dotenv(override=True)
+    # Cargar .env con manejo robusto de encoding.
+    # En servidores Windows el archivo puede estar en ANSI/Latin-1 en lugar de UTF-8.
+    try:
+        load_dotenv(override=True, encoding='utf-8')
+    except UnicodeDecodeError:
+        load_dotenv(override=True, encoding='latin-1')
     
     parser = argparse.ArgumentParser(description="Pipeline Unificado de Solicitudes NC (Coop -> Finnegans)")
     
