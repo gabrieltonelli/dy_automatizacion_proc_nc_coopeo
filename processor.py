@@ -128,7 +128,7 @@ class FinnegansProcessor:
         return f"{tipo}-{numero}"
 
     # Tipos de comprobante que generan solicitudes comerciales (SOLICITUDNC)
-    _TIPOS_COMERCIALES = {"0273", "0275"}
+    _TIPOS_COMERCIALES = {"0273"}
 
     @staticmethod
     def _subtipo_transaccion(tipocomp_coop: str, config: dict) -> str:

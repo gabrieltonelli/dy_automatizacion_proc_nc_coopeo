@@ -75,10 +75,10 @@ FINNEGANS_PROD_BONIFICACION=BONIFICACION  # Código de producto Finnegans para l
 | `0272` | F. 103 | Operativo | `SOLICITUDNCAUTO` | Devoluciones |
 | `0274` | F. 101 | Operativo | `SOLICITUDNCAUTO` | Diferencia de cantidades |
 | `0273` | F. 104 | **Comercial** | `SOLICITUDNC` | Quita por bonificaciones |
-| `0275` | F. 103 | **Comercial** | `SOLICITUDNC` | Ajuste SND - Devoluciones |
+| `0275` | F. 103 | Operativo | `SOLICITUDNCAUTO` | Ajuste SND - Devoluciones (mismo flujo que 0272) |
 
 > [!NOTE]
-> Los tipos **comerciales** (0273 y 0275) usan el subtipo `SOLICITUDNC`. Podés sobreescribir el valor con `FINNEGANS_SUBTIPO_CODIGO_COMERCIAL` en el `.env`.
+> El único tipo **comercial** actualmente es `0273`. Podés sobreescribir el subtipo con `FINNEGANS_SUBTIPO_CODIGO_COMERCIAL` en el `.env`.
 
 ## Mapeos (CSV)
 
