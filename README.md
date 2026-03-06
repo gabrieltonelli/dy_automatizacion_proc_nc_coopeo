@@ -12,7 +12,9 @@ El sistema está dividido en dos grandes fases coordinadas por un único punto d
     *   Extrae el texto y genera archivos JSON en `SolicitudNCCoop/datos_parseados`.
 2.  **Fase 2: Integración (Finnegans Processor)**
     *   Lee los JSONs generados.
-    *   Traduce los datos al formato de Finnegans usando reglas de negocio (0271, 0272, etc.).
+    *   Traduce los datos al formato de Finnegans usando reglas de negocio (0270, 0271, 0272, 0273, 0275).
+    *   **Tipos operativos** (0270, 0271, 0272, 0274): generan `SOLICITUDNCAUTO`.
+    *   **Tipos comerciales** (0273, 0275): generan `SOLICITUDNC`.
     *   **Aplica filtros de exclusión**: Omite envíos para ciertos clientes configurados por entorno.
     *   Busca facturas de referencia en Finnegans para aplicar la NC correctamente.
     *   Carga el documento final en Finnegans. (Soporta simulación con `--dry-run`).
@@ -56,7 +58,27 @@ FINNEGANS_MONEDA_CODIGO=PES
 FINNEGANS_WORKFLOW_CODIGO=VENTAS
 FINNEGANS_DIMENSION_CODIGO=DIMCTC
 FINNEGANS_MOTIVO_DEVOLUCION=16
+
+# Tipos comerciales (0273 Quita por bonificaciones / 0275 Ajuste SND Devoluciones)
+# Estos tipos usan SOLICITUDNC en lugar de SOLICITUDNCAUTO
+FINNEGANS_SUBTIPO_CODIGO_COMERCIAL=SOLICITUDNC
+FINNEGANS_MOTIVO_BONIFICACION=12          # Motivo de devolución para quitas
+FINNEGANS_PROD_BONIFICACION=BONIFICACION  # Código de producto Finnegans para líneas de quita
 ```
+
+## Tipos de Comprobante Soportados
+
+| Código | Formulario | Tipo de Solicitud | `TransaccionSubtipoCodigo` | Descripción |
+| :--- | :--- | :--- | :--- | :--- |
+| `0270` | F. 101 | Operativo | `SOLICITUDNCAUTO` | Diferencia de cantidades |
+| `0271` | F. 102 | Operativo | `SOLICITUDNCAUTO` | Diferencia de precio |
+| `0272` | F. 103 | Operativo | `SOLICITUDNCAUTO` | Devoluciones |
+| `0274` | F. 101 | Operativo | `SOLICITUDNCAUTO` | Diferencia de cantidades |
+| `0273` | F. 104 | **Comercial** | `SOLICITUDNC` | Quita por bonificaciones |
+| `0275` | F. 103 | **Comercial** | `SOLICITUDNC` | Ajuste SND - Devoluciones |
+
+> [!NOTE]
+> Los tipos **comerciales** (0273 y 0275) usan el subtipo `SOLICITUDNC`. Podés sobreescribir el valor con `FINNEGANS_SUBTIPO_CODIGO_COMERCIAL` en el `.env`.
 
 ## Mapeos (CSV)
 

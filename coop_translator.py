@@ -28,10 +28,16 @@ class CoopTranslator:
 
         if tipo_coop == "0271":
             return [self._translate_0271(json_data)]
-        elif tipo_coop in ["0272", "0275"]:
+        elif tipo_coop == "0272":
             return self._translate_0272_0275(json_data)
         elif tipo_coop in ["0270", "0274"]:
             return [self._translate_0270_0274(json_data)]
+        elif tipo_coop == "0273":
+            # F. 104 - Quita por bonificaciones -> genera SOLICITUDNC (tipo comercial)
+            return [self._translate_0273(json_data)]
+        elif tipo_coop == "0275":
+            # F. 103 - Ajuste SND Devoluciones -> genera SOLICITUDNC (tipo comercial)
+            return self._translate_0275_ajuste(json_data)
         else:
             logger.warning(f"Tipo Coop {tipo_coop} no reconocido. Usando fallback genérico.")
             return [self._translate_generic(json_data)]
@@ -216,6 +222,102 @@ class CoopTranslator:
             ))
             
         return NCPayload(cabecera, items_fin)
+
+    def _translate_0273(self, data: Dict[str, Any]) -> NCPayload:
+        """
+        F. 104 - Quita por bonificaciones.
+        Genera una solicitud de tipo comercial (SOLICITUDNC).
+        Un único ítem de descuento global sin NP de recepción ni factura de referencia.
+        """
+        items_coop = data.get("items", [])
+        empresa_cod = data.get("empresa_finnegans", "EMPRE01")
+
+        cabecera = NCCabecera(
+            fecha=self._format_date(data.get("fecha_comprobante")),
+            cliente_cod=self.config.get("intermediario_cod", "17249"),
+            descripcion=data.get("nro_comprobante"),
+            tipocomp_coop="0273",
+            factura_referencia_id=None,
+            empresa_cod=empresa_cod
+        )
+
+        items_fin = []
+        for it in items_coop:
+            neto = it.get("neto", 0.0) or 0.0
+            items_fin.append(NCItem(
+                cantidad=1.0,
+                precio_unitario=neto,
+                unidad="UN",
+                descripcion=it.get("descripcion", ""),
+                producto_codigo_finnegans=self.config.get("prod_bonificacion", "BONIFICACION"),
+                motivo_devolucion_id=self.config.get("motivo_bonificacion", "12"),
+                cantidad_presentacion=1.0,
+                neto_linea=neto,
+                iva_unitario=it.get("iva", 0.0) or 0.0
+            ))
+
+        return NCPayload(cabecera, items_fin)
+
+    def _translate_0275_ajuste(self, data: Dict[str, Any]) -> List[NCPayload]:
+        """
+        F. 103 - Ajuste SND - Devoluciones.
+        Genera solicitudes de tipo comercial (SOLICITUDNC).
+        Estructura idéntica a 0272 (agrupa por sucursal vía NP recepción),
+        pero diferenciada por tipocomp_coop="0275" para que el processor
+        asigne el subtipo SOLICITUDNC en lugar de SOLICITUDNCAUTO.
+        """
+        items_coop = data.get("items", [])
+        by_client = {}  # client_cod -> List[NCItem]
+
+        for it in items_coop:
+            ref = it.get("np_recepcion", "")
+            prefix_len = 6 if len(ref) == 12 else 5
+            prefix = ref[:prefix_len]
+
+            client_cod = self.repo.get_branch_client(prefix) or "17249"
+
+            prod_info = self.repo.get_product(it.get("descripcion"))
+            if not prod_info:
+                logger.warning(f"Producto no encontrado: {it.get('descripcion')}")
+                prod_code = "DESCONOCIDO"
+                unit = "UN"
+            else:
+                prod_code = prod_info['code']
+                unit = prod_info['unit']
+
+            neto_total = it.get("neto", 0.0) or 0.0
+            cantidad_pdf = it.get("cantidad", 1.0) or 1.0
+            iva_total = it.get("iva", 0.0) or 0.0
+
+            nc_item = NCItem(
+                cantidad=cantidad_pdf,
+                precio_unitario=neto_total / cantidad_pdf if cantidad_pdf else 0.0,
+                unidad=unit,
+                descripcion=it.get("descripcion", ""),
+                producto_codigo_finnegans=prod_code,
+                motivo_devolucion_id=self.config.get("motivo_devolucion", "16"),
+                cantidad_presentacion=cantidad_pdf,
+                neto_linea=neto_total,
+                iva_unitario=iva_total
+            )
+
+            if client_cod not in by_client:
+                by_client[client_cod] = []
+            by_client[client_cod].append(nc_item)
+
+        empresa_cod = data.get("empresa_finnegans", "EMPRE01")
+        payloads = []
+        for client, items in by_client.items():
+            cab = NCCabecera(
+                fecha=self._format_date(data.get("fecha_comprobante")),
+                cliente_cod=client,
+                descripcion=data.get("nro_comprobante"),
+                tipocomp_coop="0275",
+                empresa_cod=empresa_cod
+            )
+            payloads.append(NCPayload(cab, items))
+
+        return payloads
 
     def _translate_generic(self, data: Dict[str, Any]) -> NCPayload:
         # Fallback ultra simple

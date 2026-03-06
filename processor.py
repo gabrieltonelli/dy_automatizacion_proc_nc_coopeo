@@ -127,6 +127,20 @@ class FinnegansProcessor:
         numero = nro_norm[4:]
         return f"{tipo}-{numero}"
 
+    # Tipos de comprobante que generan solicitudes comerciales (SOLICITUDNC)
+    _TIPOS_COMERCIALES = {"0273", "0275"}
+
+    @staticmethod
+    def _subtipo_transaccion(tipocomp_coop: str, config: dict) -> str:
+        """
+        Retorna el TransaccionSubtipoCodigo según el tipo de comprobante Coop.
+        - Tipos comerciales (0273, 0275): usan SOLICITUDNC
+        - Tipos operativos (0270, 0271, 0272, 0274): usan SOLICITUDNCAUTO
+        """
+        if tipocomp_coop in FinnegansProcessor._TIPOS_COMERCIALES:
+            return config.get("transaccion_subtipo_codigo_comercial", "SOLICITUDNC")
+        return config.get("transaccion_subtipo_codigo", "SOLICITUDNCAUTO")
+
     def _build_finnegans_payload_v3(self, p: NCPayload) -> Dict[str, Any]:
         """
         Builds the complex JSON expected by Finnegans API (v3).
@@ -158,7 +172,7 @@ class FinnegansProcessor:
             "CondicionPagoCodigo": cab.condicion_pago,
             "MonedaCodigo": self.config.get("moneda_codigo", "PES"),
             "EmpresaCodigo": cab.empresa_cod,
-            "TransaccionSubtipoCodigo": self.config.get("transaccion_subtipo_codigo", "SOLICITUDNCAUTO"),
+            "TransaccionSubtipoCodigo": self._subtipo_transaccion(cab.tipocomp_coop, self.config),
             "Descripcion": f"{nro_formateado}{cab.descripcion_extra}",
             "VendedorCodigo": cab.vendedor_cod,
             "Cliente": cab.cliente_cod,

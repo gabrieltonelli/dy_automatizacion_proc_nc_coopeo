@@ -289,11 +289,15 @@ def main():
             "transaccion_tipo_codigo": os.getenv("FINNEGANS_TRANSAC_TIPO_CODIGO", "OPER"),
             "deposito_origen_codigo": os.getenv("FINNEGANS_DEPOSITO_ORIGEN_COD", "EXPEDICION ELGUEA ROMAN"),
             "dimension_codigo": os.getenv("FINNEGANS_DIMENSION_CODIGO", "DIMCTC"),
-            # Traducciones/Motivos
+            # Traducciones/Motivos - Tipos operativos (SOLICITUDNCAUTO)
             "motivo_dif_precio": os.getenv("FINNEGANS_MOTIVO_DIF_PRECIO", "12"),
             "motivo_devolucion": os.getenv("FINNEGANS_MOTIVO_DEVOLUCION", "16"),
             "motivo_dif_cantidad": os.getenv("FINNEGANS_MOTIVO_DIF_CANTIDAD", "14"),
-            "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO")
+            "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO"),
+            # Tipos comerciales (0273, 0275) -> SOLICITUDNC
+            "transaccion_subtipo_codigo_comercial": os.getenv("FINNEGANS_SUBTIPO_CODIGO_COMERCIAL", "SOLICITUDNC"),
+            "motivo_bonificacion": os.getenv("FINNEGANS_MOTIVO_BONIFICACION", "12"),
+            "prod_bonificacion": os.getenv("FINNEGANS_PROD_BONIFICACION", "BONIFICACION"),
         }
 
         finnegans = FinnegansService(FINN_ID, FINN_SECRET)
