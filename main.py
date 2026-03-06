@@ -246,6 +246,7 @@ def main():
                             "tipocomp": nc.get("tipocomp"),
                             "letra": nc.get("letra"),
                             "fecha_comprobante": parsed_data["fecha"],
+                            "document_subtype": parsed_data.get("subtipo_documento", "Solicitud NC"),
                             "items": parsed_data["items"],
                             "empresa_finnegans": FINN_EMPRESA,
                             "timestamp_extraido": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -302,10 +303,12 @@ def main():
             "motivo_devolucion": os.getenv("FINNEGANS_MOTIVO_DEVOLUCION", "16"),
             "motivo_dif_cantidad": os.getenv("FINNEGANS_MOTIVO_DIF_CANTIDAD", "14"),
             "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO"),
-            # Tipos comerciales (0273, 0275) -> SOLICITUDNC
+            # 0273 - Quita por bonificaciones -> SOLICITUDNC
             "transaccion_subtipo_codigo_comercial": os.getenv("FINNEGANS_SUBTIPO_CODIGO_COMERCIAL", "SOLICITUDNC"),
             "motivo_bonificacion": os.getenv("FINNEGANS_MOTIVO_BONIFICACION", "12"),
             "prod_bonificacion": os.getenv("FINNEGANS_PROD_BONIFICACION", "BONIFICACION"),
+            # 0275 - Ajuste SND - Devoluciones -> SOLICITUDND
+            "transaccion_subtipo_codigo_ajuste_snd": os.getenv("FINNEGANS_SUBTIPO_CODIGO_AJUSTE_SND", "SOLICITUDND"),
         }
 
         finnegans = FinnegansService(FINN_ID, FINN_SECRET)

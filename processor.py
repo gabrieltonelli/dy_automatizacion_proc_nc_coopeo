@@ -127,18 +127,30 @@ class FinnegansProcessor:
         numero = nro_norm[4:]
         return f"{tipo}-{numero}"
 
-    # Tipos de comprobante que generan solicitudes comerciales (SOLICITUDNC)
-    _TIPOS_COMERCIALES = {"0273"}
+    # Mapeo de tipos especiales a la clave de config que determina su subtipo de transacción.
+    # Los tipos no presentes aquí usan el default operativo (SOLICITUDNCAUTO).
+    _SUBTIPO_POR_TIPO = {
+        "0273": ("transaccion_subtipo_codigo_comercial", "SOLICITUDNC"),   # Quita por bonificaciones (siempre comercial)
+    }
 
     @staticmethod
     def _subtipo_transaccion(tipocomp_coop: str, config: dict) -> str:
         """
         Retorna el TransaccionSubtipoCodigo según el tipo de comprobante Coop.
-        - Tipos comerciales (0273, 0275): usan SOLICITUDNC
-        - Tipos operativos (0270, 0271, 0272, 0274): usan SOLICITUDNCAUTO
+        - Si el tipo termina en _AJUSTE (ej: 0275_AJUSTE): usa SOLICITUDND
+        - 0273:                   SOLICITUDNC        (quita comercial)
+        - Resto (0270, 0271, 0272, 0274, 0275): SOLICITUDNCAUTO  (operativo)
         """
-        if tipocomp_coop in FinnegansProcessor._TIPOS_COMERCIALES:
-            return config.get("transaccion_subtipo_codigo_comercial", "SOLICITUDNC")
+        # Caso especial para tipos que vienen marcados como AJUSTE desde el translator
+        if tipocomp_coop.endswith("_AJUSTE"):
+            return config.get("transaccion_subtipo_codigo_ajuste_snd", "SOLICITUDND")
+
+        # Mapeo explícito para otros tipos especiales
+        entry = FinnegansProcessor._SUBTIPO_POR_TIPO.get(tipocomp_coop)
+        if entry:
+            config_key, default = entry
+            return config.get(config_key, default)
+            
         return config.get("transaccion_subtipo_codigo", "SOLICITUDNCAUTO")
 
     def _build_finnegans_payload_v3(self, p: NCPayload) -> Dict[str, Any]:

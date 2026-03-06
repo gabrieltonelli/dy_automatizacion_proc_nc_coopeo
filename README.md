@@ -68,17 +68,14 @@ FINNEGANS_PROD_BONIFICACION=BONIFICACION  # Código de producto Finnegans para l
 
 ## Tipos de Comprobante Soportados
 
-| Código | Formulario | Tipo de Solicitud | `TransaccionSubtipoCodigo` | Descripción |
+| Código | Formulario | Subtipo Detectado | `TransaccionSubtipoCodigo` | Descripción |
 | :--- | :--- | :--- | :--- | :--- |
-| `0270` | F. 101 | Operativo | `SOLICITUDNCAUTO` | Diferencia de cantidades |
-| `0271` | F. 102 | Operativo | `SOLICITUDNCAUTO` | Diferencia de precio |
-| `0272` | F. 103 | Operativo | `SOLICITUDNCAUTO` | Devoluciones |
-| `0274` | F. 101 | Operativo | `SOLICITUDNCAUTO` | Diferencia de cantidades |
-| `0273` | F. 104 | **Comercial** | `SOLICITUDNC` | Quita por bonificaciones |
-| `0275` | F. 103 | Operativo | `SOLICITUDNCAUTO` | Ajuste SND - Devoluciones (mismo flujo que 0272) |
+| `027x` | F. 101/102/103 | "Solicitud NC" | `SOLICITUDNCAUTO` | Comportamiento operativo estándar |
+| `027x` | F. 101/102/103 | **"Ajuste SND"** | `SOLICITUDND` | Ajuste SND - Devoluciones |
+| `0273` | F. 104 | - | `SOLICITUDNC` | Quita por bonificaciones (siempre comercial) |
 
 > [!NOTE]
-> El único tipo **comercial** actualmente es `0273`. Podés sobreescribir el subtipo con `FINNEGANS_SUBTIPO_CODIGO_COMERCIAL` en el `.env`.
+> El sistema analiza el texto del PDF. Si detecta **"Ajuste SND"**, automáticamente asigna el subtipo configurado en `FINNEGANS_SUBTIPO_CODIGO_AJUSTE_SND` (default: `SOLICITUDND`). Si detecta **"Solicitud NC"**, usa el comportamiento estándar.
 
 ## Mapeos (CSV)
 
