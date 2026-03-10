@@ -61,6 +61,16 @@ class FinnegansProcessor:
             client_a_reemplazar = os.getenv("CLIENTE_A_REEMPLAZAR", "").strip()
             client_reemplazo = os.getenv("CLIENTE_REEMPLAZO", "").strip()
 
+            # Obtener y asignar el VendedorCodigo correspondiente al cliente original (no reemplazado)
+            mapping_vendedores = self.finnegans.get_vendedores_mapping()
+            vendedor_asignado = mapping_vendedores.get(original_client)
+            if vendedor_asignado:
+                logger.info(f"Asignando vendedor {vendedor_asignado} al cliente original {original_client}.")
+                p.cabecera.vendedor_cod = vendedor_asignado
+            else:
+                logger.warning(f"No se encontró vendedor en el mapping para el cliente original {original_client}. Se utilizará el por defecto: {p.cabecera.vendedor_cod}")
+
+
             if original_client in self.client_overwrites:
                 new_client = self.client_overwrites[original_client]
                 logger.info(f"Reemplazando cliente {original_client} por {new_client} según configuración.")

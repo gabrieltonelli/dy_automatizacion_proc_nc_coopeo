@@ -16,6 +16,7 @@ El sistema está dividido en dos grandes fases coordinadas por un único punto d
     *   **Tipos operativos** (0270, 0271, 0272, 0274): generan `SOLICITUDNCAUTO`.
     *   **Tipos comerciales** (0273, 0275): generan `SOLICITUDNC`.
     *   **Aplica filtros de exclusión**: Omite envíos para ciertos clientes configurados por entorno.
+    *   **Asignación Dinámica de Vendedor**: Para clientes "COOPERATIVA OBRERA", busca automáticamente el vendedor asignado en Finnegans y lo asocia a la solicitud.
     *   Busca facturas de referencia en Finnegans para aplicar la NC correctamente.
     *   Carga el documento final en Finnegans. (Soporta simulación con `--dry-run`).
 
@@ -229,6 +230,20 @@ La arquitectura actual está preparada para crecer:
 
 ---
 
+## Asignación Dinámica de Vendedor (Cooperativa Obrera)
+
+Para los clientes cuya razón social comienza con **"COOPERATIVA OBRERA"**, el sistema realiza una búsqueda automática del código de vendedor asignado en Finnegans.
+
+1.  **Mapeo en Memoria**: Al iniciar, el `FinnegansService` consulta la lista completa de clientes y filtra aquellos que coinciden con el patrón.
+2.  **Consulta de Detalles**: Para cada cliente detectado, se consulta su ficha individual para obtener el `VendedorCodigo`.
+3.  **Asignación**: Al procesar una NC, el sistema busca el cliente original (incluso si luego se aplica un reemplazo vía `CLIENTE_A_REEMPLAZAR`) y asigna su vendedor correspondiente en el payload final.
+4.  **Prioridad de Reemplazo**: Si existe una regla de `CLIENTE_A_REEMPLAZAR`, el vendedor se asigna basándose en el cliente original antes de realizar el cambio de código de cliente.
+5.  **Logs**: La estructura generada se vuelca al log de la terminal para validación.
+
+---
+
 ## Documentación Adicional
 
 *   📄 [**COMPARISON_ARCHITECTURE.md**](./COMPARISON_ARCHITECTURE.md) — Análisis comparativo entre la arquitectura legacy (Rocketbot + Apps Script) y esta solución. Incluye una discusión estratégica sobre No-Code vs desarrollo asistido por IA, recomendada para equipos directivos y de tecnología.
+*   📄 [**INFORME_DIRECTORIO_AUTOMATIZACION.md**](./INFORME_DIRECTORIO_AUTOMATIZACION.md) — Informe ejecutivo resumido con los logros, ahorro de tiempos y ventajas estratégicas del proyecto.
+
