@@ -34,19 +34,17 @@ class FinnegansProcessor:
         files = [f for f in os.listdir(self.json_dir) if f.endswith(".json")]
         logger.info(f"Found {len(files)} JSON files to process.")
 
-        stats = {"ok": 0, "error": 0}
+        file_results = {}
         for filename in files:
             path = os.path.join(self.json_dir, filename)
             try:
-                if self._process_file(path, filename):
-                    stats["ok"] += 1
-                else:
-                    stats["error"] += 1
+                success = self._process_file(path, filename)
+                file_results[filename] = success
             except Exception as e:
                 logger.error(f"Error processing {filename}: {e}", exc_info=True)
                 shutil.move(path, os.path.join(self.error_dir, filename))
-                stats["error"] += 1
-        return stats
+                file_results[filename] = False
+        return file_results
 
     def _process_file(self, path: str, filename: str):
         with open(path, 'r', encoding='utf-8') as f:
@@ -62,13 +60,19 @@ class FinnegansProcessor:
             client_reemplazo = os.getenv("CLIENTE_REEMPLAZO", "").strip()
 
             # Obtener y asignar el VendedorCodigo correspondiente al cliente original (no reemplazado)
+            # Solo para clientes que pertenecen a la Cooperativa Obrera
             mapping_vendedores = self.finnegans.get_vendedores_mapping()
-            vendedor_asignado = mapping_vendedores.get(original_client)
-            if vendedor_asignado:
-                logger.info(f"Asignando vendedor {vendedor_asignado} al cliente original {original_client}.")
-                p.cabecera.vendedor_cod = vendedor_asignado
+            if original_client in mapping_vendedores:
+                logger.info(f"El cliente {original_client} es de Cooperativa. Consultando vendedor real...")
+                vendedor_info = self.finnegans.get_cliente_data(original_client)
+                vendedor_final = vendedor_info.get("vendedor_codigo")
+                if vendedor_final:
+                    logger.info(f"Asignando vendedor {vendedor_final} al cliente original {original_client}.")
+                    p.cabecera.vendedor_cod = vendedor_final
+                else:
+                    logger.warning(f"No se pudo obtener un vendedor válido para {original_client}. Se utilizará el por defecto: {p.cabecera.vendedor_cod}")
             else:
-                logger.warning(f"No se encontró vendedor en el mapping para el cliente original {original_client}. Se utilizará el por defecto: {p.cabecera.vendedor_cod}")
+                logger.debug(f"El cliente {original_client} no es de la lista de Cooperativa. Se mantiene vendedor por defecto.")
 
 
             if original_client in self.client_overwrites:

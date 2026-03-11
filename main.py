@@ -14,8 +14,11 @@ from processor import FinnegansProcessor
 
 # Setup Logging
 def setup_logging(log_file="pipeline_ejecucion.log"):
+    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
+    
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
         handlers=[
             logging.StreamHandler(),
@@ -34,11 +37,11 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
     print(f"Ventana procesada: {fecha_desde} -> {fecha_hasta}")
     print()
     print("PROVEEDORES:")
-    print(f"  - Total: {stats['total_prov']}")
-    print(f"  - Procesados exitosamente: {stats['prov_ok']}")
-    print(f"  - Con errores: {stats['prov_error']}")
+    print(f"  - Encontrados: {stats['total_prov']}")
+    print(f"  - Procesados OK: {stats['prov_ok']}")
+    print(f"  - Procesados con errores: {stats['prov_error']}")
     print()
-    print("NOTAS DE CRÉDITO:")
+    print("SOLICITUDES:")
     print(f"  - Total encontradas: {stats['nc_total']}")
     print(f"  - Ignoradas por filtro: {stats['nc_skipped']}")
     print(f"  - Procesadas OK: {stats['nc_ok']}")
@@ -56,7 +59,7 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
             nombre = d.get('nombre', '')
             header = f"{prov} - {nombre}" if nombre else prov
             print(f"\n  [{header}]")
-            print(f"    - NC encontradas: {d['encontradas']}")
+            print(f"    - Solicitudes encontradas: {d['encontradas']}")
             print(f"    - Saltadas: {d['saltadas']}")
             print(f"    - Procesadas OK: {d['ok']}")
             print(f"    - Con error: {d['error']}")
@@ -345,9 +348,28 @@ def main():
         )
         
         processor.dry_run = args.dry_run
-        f_stats = processor.run()
-        stats["nc_ok"] = f_stats["ok"]
-        stats["nc_error"] = f_stats["error"]
+        file_results = processor.run()
+        
+        # Calcular estadísticas globales y actualizar detalles por proveedor
+        for filename, success in file_results.items():
+            # Extraer prov_id del nombre: NC_{prov_id}_{nro}.json
+            try:
+                parts = filename.split("_")
+                prov_id = parts[1] if len(parts) >= 2 else None
+            except:
+                prov_id = None
+
+            if success:
+                stats["nc_ok"] += 1
+                # Ya se incrementó el 'ok' del proveedor en la fase 1 (al crear el JSON)
+            else:
+                stats["nc_error"] += 1
+                if prov_id and prov_id in stats["detalles"]:
+                    # Si falló en Finnegans, lo restamos del 'ok' de extracción y lo sumamos a 'error'
+                    # Aseguramos que no quede un conteo negativo por si acaso
+                    if stats["detalles"][prov_id]["ok"] > 0:
+                        stats["detalles"][prov_id]["ok"] -= 1
+                    stats["detalles"][prov_id]["error"] += 1
 
     print_summary(stats, fecha_desde, fecha_hasta, PDF_DIR, ERROR_DIR, SUCCESS_DIR, TEXTOS_DIR, log_file)
     logger.info("--- PIPELINE FINALIZADO ---")

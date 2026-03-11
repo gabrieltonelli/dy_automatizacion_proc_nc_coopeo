@@ -29,7 +29,7 @@ class FinnegansService:
             import json
             curl += f" -H \"Content-Type: application/json\" -d '{json.dumps(json_data)}'"
         
-        logger.info(f"DEBUG CURL: {curl}")
+        logger.debug(f"DEBUG CURL: {curl}")
 
     def _get_access_token(self) -> str:
         if self._access_token:
@@ -113,7 +113,7 @@ class FinnegansService:
 
         logger.info("Obteniendo lista de códigos de clientes de la Cooperativa...")
         cooperativas = self._fetch_clientes_cooperativa()
-        mapping = {c.get("codigo"): "PENDIENTE" for c in cooperativas}
+        mapping = {str(c.get("codigo")): True for c in cooperativas}
         self._vendedores_mapping = mapping
         return self._vendedores_mapping
 
