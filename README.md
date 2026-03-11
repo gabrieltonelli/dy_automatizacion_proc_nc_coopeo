@@ -12,8 +12,11 @@ El sistema está dividido en dos grandes fases coordinadas por un único punto d
     *   Extrae el texto y genera archivos JSON en `SolicitudNCCoop/datos_parseados`.
 2.  **Fase 2: Integración (Finnegans Processor)**
     *   Lee los JSONs generados.
-    *   Traduce los datos al formato de Finnegans usando reglas de negocio (0271, 0272, etc.).
+    *   Traduce los datos al formato de Finnegans usando reglas de negocio (0270, 0271, 0272, 0273, 0275).
+    *   **Tipos operativos** (0270, 0271, 0272, 0274): generan `SOLICITUDNCAUTO`.
+    *   **Tipos comerciales** (0273, 0275): generan `SOLICITUDNC`.
     *   **Aplica filtros de exclusión**: Omite envíos para ciertos clientes configurados por entorno.
+    *   **Asignación Dinámica de Vendedor**: Para clientes "COOPERATIVA OBRERA", busca automáticamente el vendedor asignado en Finnegans y lo asocia a la solicitud.
     *   Busca facturas de referencia en Finnegans para aplicar la NC correctamente.
     *   Carga el documento final en Finnegans. (Soporta simulación con `--dry-run`).
 
@@ -56,7 +59,24 @@ FINNEGANS_MONEDA_CODIGO=PES
 FINNEGANS_WORKFLOW_CODIGO=VENTAS
 FINNEGANS_DIMENSION_CODIGO=DIMCTC
 FINNEGANS_MOTIVO_DEVOLUCION=16
+
+# Tipos comerciales (0273 Quita por bonificaciones / 0275 Ajuste SND Devoluciones)
+# Estos tipos usan SOLICITUDNC en lugar de SOLICITUDNCAUTO
+FINNEGANS_SUBTIPO_CODIGO_COMERCIAL=SOLICITUDNC
+FINNEGANS_MOTIVO_BONIFICACION=12          # Motivo de devolución para quitas
+FINNEGANS_PROD_BONIFICACION=BONIFICACION  # Código de producto Finnegans para líneas de quita
 ```
+
+## Tipos de Comprobante Soportados
+
+| Código | Formulario | Subtipo Detectado | `TransaccionSubtipoCodigo` | Descripción |
+| :--- | :--- | :--- | :--- | :--- |
+| `027x` | F. 101/102/103 | "Solicitud NC" | `SOLICITUDNCAUTO` | Comportamiento operativo estándar |
+| `027x` | F. 101/102/103 | **"Ajuste SND"** | `SOLICITUDND` | Ajuste SND - Devoluciones |
+| `0273` | F. 104 | - | `SOLICITUDNC` | Quita por bonificaciones (siempre comercial) |
+
+> [!NOTE]
+> El sistema analiza el texto del PDF. Si detecta **"Ajuste SND"**, automáticamente asigna el subtipo configurado en `FINNEGANS_SUBTIPO_CODIGO_AJUSTE_SND` (default: `SOLICITUDND`). Si detecta **"Solicitud NC"**, usa el comportamiento estándar.
 
 ## Mapeos (CSV)
 
@@ -210,6 +230,20 @@ La arquitectura actual está preparada para crecer:
 
 ---
 
+## Asignación Dinámica de Vendedor (Cooperativa Obrera)
+
+Para los clientes cuya razón social comienza con **"COOPERATIVA OBRERA"**, el sistema realiza una búsqueda automática del código de vendedor asignado en Finnegans.
+
+1.  **Mapeo en Memoria**: Al iniciar, el `FinnegansService` consulta la lista completa de clientes y filtra aquellos que coinciden con el patrón.
+2.  **Consulta de Detalles**: Para cada cliente detectado, se consulta su ficha individual para obtener el `VendedorCodigo`.
+3.  **Asignación**: Al procesar una NC, el sistema busca el cliente original (incluso si luego se aplica un reemplazo vía `CLIENTE_A_REEMPLAZAR`) y asigna su vendedor correspondiente en el payload final.
+4.  **Prioridad de Reemplazo**: Si existe una regla de `CLIENTE_A_REEMPLAZAR`, el vendedor se asigna basándose en el cliente original antes de realizar el cambio de código de cliente.
+5.  **Logs**: La estructura generada se vuelca al log de la terminal para validación.
+
+---
+
 ## Documentación Adicional
 
 *   📄 [**COMPARISON_ARCHITECTURE.md**](./COMPARISON_ARCHITECTURE.md) — Análisis comparativo entre la arquitectura legacy (Rocketbot + Apps Script) y esta solución. Incluye una discusión estratégica sobre No-Code vs desarrollo asistido por IA, recomendada para equipos directivos y de tecnología.
+*   📄 [**INFORME_DIRECTORIO_AUTOMATIZACION.md**](./INFORME_DIRECTORIO_AUTOMATIZACION.md) — Informe ejecutivo resumido con los logros, ahorro de tiempos y ventajas estratégicas del proyecto.
+

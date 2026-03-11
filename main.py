@@ -14,8 +14,11 @@ from processor import FinnegansProcessor
 
 # Setup Logging
 def setup_logging(log_file="pipeline_ejecucion.log"):
+    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
+    
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
         handlers=[
             logging.StreamHandler(),
@@ -34,11 +37,11 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
     print(f"Ventana procesada: {fecha_desde} -> {fecha_hasta}")
     print()
     print("PROVEEDORES:")
-    print(f"  - Total: {stats['total_prov']}")
-    print(f"  - Procesados exitosamente: {stats['prov_ok']}")
-    print(f"  - Con errores: {stats['prov_error']}")
+    print(f"  - Encontrados: {stats['total_prov']}")
+    print(f"  - Procesados OK: {stats['prov_ok']}")
+    print(f"  - Procesados con errores: {stats['prov_error']}")
     print()
-    print("NOTAS DE CRÉDITO:")
+    print("SOLICITUDES:")
     print(f"  - Total encontradas: {stats['nc_total']}")
     print(f"  - Ignoradas por filtro: {stats['nc_skipped']}")
     print(f"  - Procesadas OK: {stats['nc_ok']}")
@@ -53,8 +56,10 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
     if stats['detalles']:
         print("DETALLE POR PROVEEDOR:")
         for prov, d in stats['detalles'].items():
-            print(f"\n  [{prov}]")
-            print(f"    - NC encontradas: {d['encontradas']}")
+            nombre = d.get('nombre', '')
+            header = f"{prov} - {nombre}" if nombre else prov
+            print(f"\n  [{header}]")
+            print(f"    - Solicitudes encontradas: {d['encontradas']}")
             print(f"    - Saltadas: {d['saltadas']}")
             print(f"    - Procesadas OK: {d['ok']}")
             print(f"    - Con error: {d['error']}")
@@ -69,7 +74,12 @@ def print_summary(stats, fecha_desde, fecha_hasta, pdf_dir, error_dir, json_dir,
     print(f"{sep}\n")
 
 def main():
-    load_dotenv(override=True)
+    # Cargar .env con manejo robusto de encoding.
+    # En servidores Windows el archivo puede estar en ANSI/Latin-1 en lugar de UTF-8.
+    try:
+        load_dotenv(override=True, encoding='utf-8')
+    except UnicodeDecodeError:
+        load_dotenv(override=True, encoding='latin-1')
     
     parser = argparse.ArgumentParser(description="Pipeline Unificado de Solicitudes NC (Coop -> Finnegans)")
     
@@ -190,7 +200,8 @@ def main():
 
         for p_item in proveedores:
             prov_id = str(p_item.get("prov"))
-            stats["detalles"][prov_id] = {"encontradas": 0, "saltadas": 0, "ok": 0, "error": 0}
+            prov_nombre = p_item.get("nombre", "")
+            stats["detalles"][prov_id] = {"nombre": prov_nombre, "encontradas": 0, "saltadas": 0, "ok": 0, "error": 0}
             try:
                 logger.info(f"Procesando Proveedor {prov_id}...")
                 coop.seleccionar_proveedor(prov_id)
@@ -238,6 +249,7 @@ def main():
                             "tipocomp": nc.get("tipocomp"),
                             "letra": nc.get("letra"),
                             "fecha_comprobante": parsed_data["fecha"],
+                            "document_subtype": parsed_data.get("subtipo_documento", "Solicitud NC"),
                             "items": parsed_data["items"],
                             "empresa_finnegans": FINN_EMPRESA,
                             "timestamp_extraido": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -289,11 +301,17 @@ def main():
             "transaccion_tipo_codigo": os.getenv("FINNEGANS_TRANSAC_TIPO_CODIGO", "OPER"),
             "deposito_origen_codigo": os.getenv("FINNEGANS_DEPOSITO_ORIGEN_COD", "EXPEDICION ELGUEA ROMAN"),
             "dimension_codigo": os.getenv("FINNEGANS_DIMENSION_CODIGO", "DIMCTC"),
-            # Traducciones/Motivos
+            # Traducciones/Motivos - Tipos operativos (SOLICITUDNCAUTO)
             "motivo_dif_precio": os.getenv("FINNEGANS_MOTIVO_DIF_PRECIO", "12"),
             "motivo_devolucion": os.getenv("FINNEGANS_MOTIVO_DEVOLUCION", "16"),
             "motivo_dif_cantidad": os.getenv("FINNEGANS_MOTIVO_DIF_CANTIDAD", "14"),
-            "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO")
+            "prod_dif_precio": os.getenv("FINNEGANS_PROD_DIF_PRECIO", "DIFERENCIA DE PRECIO"),
+            # 0273 - Quita por bonificaciones -> SOLICITUDNC
+            "transaccion_subtipo_codigo_comercial": os.getenv("FINNEGANS_SUBTIPO_CODIGO_COMERCIAL", "SOLICITUDNC"),
+            "motivo_bonificacion": os.getenv("FINNEGANS_MOTIVO_BONIFICACION", "12"),
+            "prod_bonificacion": os.getenv("FINNEGANS_PROD_BONIFICACION", "BONIFICACION"),
+            # 0275 - Ajuste SND - Devoluciones -> SOLICITUDND
+            "transaccion_subtipo_codigo_ajuste_snd": os.getenv("FINNEGANS_SUBTIPO_CODIGO_AJUSTE_SND", "SOLICITUDND"),
         }
 
         finnegans = FinnegansService(FINN_ID, FINN_SECRET)
@@ -330,9 +348,28 @@ def main():
         )
         
         processor.dry_run = args.dry_run
-        f_stats = processor.run()
-        stats["nc_ok"] = f_stats["ok"]
-        stats["nc_error"] = f_stats["error"]
+        file_results = processor.run()
+        
+        # Calcular estadísticas globales y actualizar detalles por proveedor
+        for filename, success in file_results.items():
+            # Extraer prov_id del nombre: NC_{prov_id}_{nro}.json
+            try:
+                parts = filename.split("_")
+                prov_id = parts[1] if len(parts) >= 2 else None
+            except:
+                prov_id = None
+
+            if success:
+                stats["nc_ok"] += 1
+                # Ya se incrementó el 'ok' del proveedor en la fase 1 (al crear el JSON)
+            else:
+                stats["nc_error"] += 1
+                if prov_id and prov_id in stats["detalles"]:
+                    # Si falló en Finnegans, lo restamos del 'ok' de extracción y lo sumamos a 'error'
+                    # Aseguramos que no quede un conteo negativo por si acaso
+                    if stats["detalles"][prov_id]["ok"] > 0:
+                        stats["detalles"][prov_id]["ok"] -= 1
+                    stats["detalles"][prov_id]["error"] += 1
 
     print_summary(stats, fecha_desde, fecha_hasta, PDF_DIR, ERROR_DIR, SUCCESS_DIR, TEXTOS_DIR, log_file)
     logger.info("--- PIPELINE FINALIZADO ---")

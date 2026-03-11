@@ -101,8 +101,14 @@ class CoopParser:
         return "\n".join(texts)
 
     def parse_text_to_dict(self, text: str) -> Dict[str, Any]:
-        data = {"fecha": None, "items": []}
+        data = {"fecha": None, "items": [], "subtipo_documento": "Solicitud NC"}
         
+        # Detector de subtipo de documento (Ajuste SND vs Solicitud NC)
+        if "Ajuste SND" in text:
+            data["subtipo_documento"] = "Ajuste SND"
+        elif "Solicitud NC" in text:
+            data["subtipo_documento"] = "Solicitud NC"
+
         m_fecha = re.search(r"Fecha\s*\[(\d{2}/\d{2}/\d{4})\]", text)
         if m_fecha:
             data["fecha"] = m_fecha.group(1)
